@@ -24,6 +24,9 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   destructive,
   onConfirm,
+  open: controlledOpen,
+  onOpenChange,
+  onCloseAutoFocus,
 }: {
   trigger: ReactNode;
   title: string;
@@ -31,8 +34,12 @@ export function ConfirmDialog({
   confirmLabel?: string;
   destructive?: boolean;
   onConfirm: () => void | Promise<void>;
+  open?: boolean; onOpenChange?: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -51,8 +58,8 @@ export function ConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
-      <AlertDialogContent className="max-w-md rounded-2xl">
+      {trigger && <AlertDialogTrigger asChild data-slot="confirmation-trigger">{trigger}</AlertDialogTrigger>}
+      <AlertDialogContent className="max-w-md rounded-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader className="items-center text-center sm:text-center">
           <span
             className={cn(
@@ -74,7 +81,7 @@ export function ConfirmDialog({
           )}
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:justify-center">
-          <AlertDialogCancel disabled={busy} className="rounded-xl">
+          <AlertDialogCancel disabled={busy} className="rounded-md">
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
@@ -84,7 +91,7 @@ export function ConfirmDialog({
             }}
             disabled={busy}
             className={cn(
-              "rounded-xl",
+              "rounded-md",
               destructive && "bg-red-600 text-white hover:bg-red-700"
             )}
           >

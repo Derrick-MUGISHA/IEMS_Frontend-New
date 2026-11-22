@@ -6,6 +6,7 @@ import { useScannerAuth, useAuthHydrated } from "@/context/AuthContext";
 import { PortalShell, Panel, Field, Button, Note, Waiting } from "@/components/portal/ui";
 import PasswordField from "@/components/portal/PasswordField";
 import Scanner from "@/components/portal/Scanner";
+import { ScanLine, ShieldCheck } from "lucide-react";
 
 /* Entrance scanning for partner organizations: sign in with the access key
    given by the super admin, then scan tickets */
@@ -46,6 +47,7 @@ export default function OrgScanPage() {
     <PortalShell
       eyebrow="Venue check-in"
       title={isAuthenticated ? `Scanning as ${user?.name ?? ""}` : "Scanner sign in"}
+      wide={isAuthenticated}
     >
       {isAuthenticated ? (
         <div className="space-y-4">
@@ -57,6 +59,8 @@ export default function OrgScanPage() {
       ) : (
         <Panel>
           <form onSubmit={submit} className="space-y-4">
+            <div className="mb-2 flex size-14 items-center justify-center rounded-2xl bg-orange/15 text-orange"><ScanLine className="size-7" aria-hidden="true" /></div>
+            <h2 className="text-xl font-semibold text-cream">Welcome to the gate</h2>
             <p className="text-sm text-cream-dim">
               Sign in with the scanner account provided by the event admin.
             </p>
@@ -82,6 +86,7 @@ export default function OrgScanPage() {
               {busy ? "Checking…" : "Start scanning"}
             </Button>
             {error && <Note tone="error">{error}</Note>}
+            <p className="flex items-center justify-center gap-2 border-t border-line pt-4 text-xs text-cream-dim"><ShieldCheck className="size-4" />Authorised event staff only</p>
           </form>
         </Panel>
       )}

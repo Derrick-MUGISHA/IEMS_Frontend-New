@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useCreateEvent } from "@/hooks/admin/events";
 import { EventForm } from "@/components/admin/EventForm";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
 import type { EventFormValues } from "@/schemas/admin";
 import type { EventCreateValues } from "@/schemas/admin";
 import { kigaliInputToISO } from "@/lib/time";
@@ -14,7 +13,6 @@ export default function NewEventPage() {
   const create = useCreateEvent();
 
   async function onSubmit(v: EventFormValues) {
-    /* the create endpoint doesn't take `status`; drop empty endTime */
     const payload: EventCreateValues = {
       name: v.name,
       slug: v.slug,
@@ -32,6 +30,7 @@ export default function NewEventPage() {
       price: v.price,
       location: v.location,
       isPublished: v.isPublished,
+      status: v.status,
     };
     const res = await create.mutateAsync(payload);
     router.push(`/admin/events/${res.event.id}`);
@@ -43,16 +42,12 @@ export default function NewEventPage() {
         title="New event"
         crumbs={[{ label: "Events", href: "/admin/events" }, { label: "New" }]}
       />
-      <Card className="w-full shadow-none">
-        <CardContent className="pt-6">
           <EventForm
             mode="create"
             submitting={create.isPending}
             onSubmit={onSubmit}
             onCancel={() => router.push("/admin/events")}
           />
-        </CardContent>
-      </Card>
     </div>
   );
 }

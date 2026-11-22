@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
-import { uploadImage, InvalidImageError } from "@/lib/cloudinary";
+import { uploadImage, InvalidImageError, ImageUploadError } from "@/lib/cloudinary";
 import { ok, fail, unauthorized } from "@/lib/http";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     return ok({ url });
   } catch (err) {
     if (err instanceof InvalidImageError) return fail(err.message);
+    if (err instanceof ImageUploadError) return fail(err.message, err.status);
     throw err;
   }
 }

@@ -24,6 +24,8 @@ Event registration, ticketing, and QR check-in platform for Igire Rwanda Organiz
    - `MONGODB_URI` — e.g. `mongodb://localhost:27017/iems`
    - `JWT_SECRET` — `openssl rand -hex 32` (≥32 chars, required)
    - `GMAIL_USER` / `GMAIL_APP_PASSWORD` — a Gmail address and [app password](https://myaccount.google.com/apppasswords)
+   - `MAIL_FROM_ADDRESS` — the no-reply sender mailbox or authorised Gmail sender alias. Defaults to `no-reply@igirerwanda.org`, matching IgireNodeMailerV2; Gmail must allow the selected sender address.
+   - `MAIL_REPLY_TO` — optional reply address, defaults to the sender mailbox.
    - `CLOUDINARY_*` — from your Cloudinary dashboard
    - `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` — admin bootstrap credentials (≥8 chars)
    - `SCANNER_EMAIL` / `SCANNER_PASSWORD` — gate account (≥8 chars; **must differ** from the admin password)
@@ -37,6 +39,45 @@ pnpm dev
 ```
 
 Scripts: `pnpm dev` · `pnpm build` · `pnpm start` · `pnpm lint` · `pnpm test` · `pnpm seed` · `pnpm health`.
+
+## Start with a public ngrok URL
+
+Install Docker and the [ngrok CLI](https://ngrok.com/docs/gateway/endpoints/agent-cli-quickstart), then configure your ngrok account once with `ngrok config add-authtoken YOUR_TOKEN`. Keep the token out of the repository.
+
+```bash
+pnpm dev     # Docker development + ngrok, with hot reload
+pnpm start   # Docker production build + ngrok
+```
+
+Both commands print the public HTTPS URL, admin URL and scanner URL after the app is ready. They set the public app URL for invitation and ticket links automatically. An existing IEMS tunnel is reused; switching between development and production moves that same public URL to the selected container. Only one of these environments is exposed at a time. Other applications' ngrok endpoints are left alone.
+
+Keep the ngrok terminal open. If this command started ngrok, Ctrl+C closes its tunnel; Docker keeps running. If an ngrok agent was already running, it is reused and stays running. Set `IEMS_NGROK_URL=https://your-reserved-domain.ngrok.app` before startup if your account has a particular domain to use when creating a tunnel. The default ngrok agent API must be available on `127.0.0.1:4040`.
+
+Use `pnpm dev:local` or `pnpm start:local` for the original Next.js commands without Docker or ngrok. The Docker-only commands below also remain available.
+
+## Docker
+
+Production and development both run the complete Next.js app, including the user pages, admin panel and API. Docker must be running. Fill in `.env` first; secrets are passed at runtime and excluded from the image.
+
+```bash
+# Production: http://localhost:3002
+docker compose up --build -d
+docker compose ps
+docker compose logs -f app
+
+# Development with hot reload: http://localhost:3003
+docker compose -f compose.dev.yaml up --build --renew-anon-volumes -d
+
+# Stop either environment
+docker compose down
+docker compose -f compose.dev.yaml down
+```
+
+Override `IEMS_PORT` (production) or `IEMS_DEV_PORT` (development) to change the host port. Set `IEMS_ENV_FILE=.env.local` to use another runtime environment file. Both environments use your configured MongoDB; if it runs on the host, replace `localhost` in `MONGODB_URI` with `host.docker.internal`. No database is seeded automatically.
+
+Set `NEXT_PUBLIC_APP_URL` to the browser-facing application URL before building; Next.js embeds this public value in the production build, including invitation and ticket links. For local production testing, use `NEXT_PUBLIC_APP_URL=http://localhost:3002 docker compose up --build -d`. Rebuild production after source changes. Development mounts the source and keeps its dependencies and build cache in separate Docker volumes. After dependency changes, rerun the development command above; `--renew-anon-volumes` loads dependencies from the rebuilt image.
+
+The production image uses Next.js standalone output, includes ticket fonts and public assets, runs as a non-root user, and checks `/api/health` for HTTP liveness. This endpoint does not check MongoDB or email delivery. Only run one production replica; see the deployment note below.
 
 ## Deployment note (important)
 

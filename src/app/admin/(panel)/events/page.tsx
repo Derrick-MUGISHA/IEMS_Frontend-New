@@ -3,14 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, CalendarRange } from "lucide-react";
+import { CalendarPlus, CalendarRange, Eye, Pencil, Download, X } from "lucide-react";
 import { useEvents } from "@/hooks/admin/events";
 import { EVENT_CATEGORIES, EVENT_STATUSES, type AdminEvent } from "@/types/admin";
-import { CATEGORY_COLORS } from "@/lib/events";
+import { EventImage } from "@/components/admin/EventImage";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { downloadCsv } from "@/lib/tableExport";
 import { formatEventDate } from "@/lib/time";
 
 /* event dates always render in Kigali time, matching what the admin typed */
@@ -46,24 +48,10 @@ export default function EventsPage() {
       sortValue: (e) => e.name.toLowerCase(),
       cell: (e) => (
         <div className="flex items-center gap-3">
-          {e.gallery?.[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={e.gallery[0]}
-              alt=""
-              className="size-10 shrink-0 rounded-md border border-border object-cover"
-            />
-          ) : (
-            <span
-              className="flex size-10 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
-              style={{ backgroundColor: CATEGORY_COLORS[e.category] ?? "#1e5c38" }}
-            >
-              {e.name.charAt(0).toUpperCase()}
-            </span>
-          )}
+          <EventImage thumbnail images={e.gallery} name={e.name} className="size-[50px]" />
           <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{e.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{e.location || "—"}</p>
+            <p className="max-w-sm break-words font-semibold text-foreground">{e.name}</p>
+            <p className="mt-1 max-w-sm break-words text-xs text-muted-foreground">{e.location || "—"}</p>
           </div>
         </div>
       ),
@@ -86,11 +74,7 @@ export default function EventsPage() {
       id: "capacity",
       header: "Capacity",
       sortValue: (e) => e.maxAttendees,
-      cell: (e) => (
-        <span className="tabular-nums text-muted-foreground">
-          {e.maxAttendees === 0 ? "Uncapped" : e.maxAttendees}
-        </span>
-      ),
+      cell: (e) => <div className="min-w-28 space-y-1.5"><p className="text-sm tabular-nums">{e.registeredCount ?? 0} <span className="text-muted-foreground">/ {e.maxAttendees || "Unlimited"}</span></p>{e.maxAttendees > 0 && <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, ((e.registeredCount ?? 0) / e.maxAttendees) * 100)}%` }} /></div>}</div>,
     },
     {
       id: "status",
@@ -106,6 +90,10 @@ export default function EventsPage() {
         </div>
       ),
     },
+    { id: "actions", header: "Actions", cell: (event) => <div onClick={(e) => e.stopPropagation()}><ActionMenu actions={[
+      { label: "View event", icon: <Eye className="size-4" />, run: () => router.push(`/admin/events/${event.id}`) },
+      { label: "Edit event", icon: <Pencil className="size-4" />, run: () => router.push(`/admin/events/${event.id}/edit`) },
+    ]} /></div> },
   ];
 
   return (
@@ -123,11 +111,12 @@ export default function EventsPage() {
         }
       />
 
-      {isPending ? (
-        <TableSkeleton cols={6} />
-      ) : error ? (
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        {[{ label: "All events", value: data?.length ?? 0 }, { label: "Registration open", value: data?.filter((event) => event.status === "OPEN").length ?? 0 }, { label: "Published on calendar", value: data?.filter((event) => event.isPublished).length ?? 0 }].map((item) => <div key={item.label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{item.label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{item.value}</p></div>)}
+      </div>
+      {error ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
-      ) : (data ?? []).length === 0 ? (
+      ) : !isPending && (data ?? []).length === 0 ? (
         <EmptyState
           icon={<CalendarRange className="size-5" />}
           title="No events yet"
@@ -143,14 +132,17 @@ export default function EventsPage() {
         />
       ) : (
         <DataTable
+          loading={isPending}
           data={rows}
           columns={columns}
           getRowId={(e) => e.id}
           onRowClick={(e) => router.push(`/admin/events/${e.id}`)}
           searchable={(e) => `${e.name} ${e.location} ${e.slug}`}
-          searchPlaceholder="Search events…"
+          searchPlaceholder="Search by event name or venue…"
+          selectionActions={(selected) => <Button size="sm" variant="outline" onClick={() => downloadCsv("selected-events.csv", ["Event", "Venue", "Starts", "Status", "Capacity"], selected.map((event) => [event.name, event.location, event.startTime, event.status, event.maxAttendees]))}><Download />Export selected</Button>}
           toolbar={
             <>
+              {(status !== "all" || category !== "all") && <Button variant="outline" size="sm" onClick={() => { setStatus("all"); setCategory("all"); }}><X />Clear filters</Button>}
               <Select value={status} onValueChange={setStatus}>
                 <SelectTrigger className="h-9 w-32.5">
                   <SelectValue placeholder="Status" />

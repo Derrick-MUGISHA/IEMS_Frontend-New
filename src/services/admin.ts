@@ -43,7 +43,7 @@ const qs = (params: Record<string, string | undefined>) => {
 
 /* ------------------------------------------------------------- Dashboard */
 export const dashboardService = {
-  stats: () => api<DashboardStats>("/api/admin/dashboard", { role: "admin" }),
+  stats: (eventId?: string) => api<DashboardStats>(`/api/admin/dashboard${qs({ event: eventId })}`, { role: "admin" }),
   eventStats: () =>
     api<{ stats: EventStat[]; recentScans: { at: string; result: string }[] }>(
       "/api/admin/stats",
@@ -100,7 +100,7 @@ export const participantsService = {
     api<{ attendees: AdminParticipant[] }>(`/api/admin/attendees${qs(f)}`, { role: "admin" }),
   get: (id: string) => api<ParticipantProfile>(`/api/admin/attendees/${id}`, { role: "admin" }),
   create: (body: ParticipantCreateValues) =>
-    api<{ participant: { id: string; name: string; email: string } }>("/api/admin/attendees", {
+    api<{ participant: { id: string; name: string; email: string }; invitationSent: boolean; invitationError?: string }>("/api/admin/attendees", {
       role: "admin",
       body,
     }),
@@ -126,7 +126,7 @@ export const participantsService = {
 
 /* ------------------------------------------------------------- Reminders */
 export const remindersService = {
-  runNow: () => api<ReminderSummary>("/api/admin/reminders/run", { role: "admin", method: "POST" }),
+  runNow: (eventId: string) => api<ReminderSummary>("/api/admin/reminders/run", { role: "admin", method: "POST", body: { eventId } }),
 };
 
 /* ---------------------------------------------------------------- Guests */

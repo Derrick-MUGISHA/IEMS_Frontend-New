@@ -37,9 +37,7 @@ export default function VerifyTokenPage({ params }: { params: Promise<{ token: s
           >
             <ErrorIcon />
             <p className="text-sm text-terracotta">{error}</p>
-            <Link href="/verify">
-              <Button>Request a new link</Button>
-            </Link>
+            <Button render={<Link href="/verify" />}>Request a new link</Button>
           </motion.div>
         ) : (
           <Waiting message="Checking your verification link…" />

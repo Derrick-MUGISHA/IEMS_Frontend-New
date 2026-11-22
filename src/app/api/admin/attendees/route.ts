@@ -16,7 +16,9 @@ import {
 } from "@/models";
 import { requireAdmin } from "@/lib/auth";
 import { ok, fail, unauthorized } from "@/lib/http";
+import { isValidObjectId } from "mongoose";
 import type { QueryFilter } from "mongoose";
+import { sendParticipantInvitation } from "@/lib/participantInvitation";
 
 function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
   return allowed.includes(value as T) ? (value as T) : undefined;
@@ -38,6 +40,7 @@ export async function GET(req: Request) {
   );
   if (registrationStatus) filter.registrationStatus = registrationStatus;
   const eventId = url.searchParams.get("event");
+  if (eventId && !isValidObjectId(eventId)) return fail("Choose a valid event");
   if (eventId) filter.event = eventId;
   const q = url.searchParams.get("q");
   if (q) {
@@ -58,7 +61,6 @@ export async function GET(req: Request) {
 
   const participants = await Participant.find(filter)
     .sort({ createdAt: 1 })
-    .limit(500)
     .populate("event", "name startTime status");
   const tickets = await Ticket.find({
     holderType: "Participant",
@@ -84,7 +86,7 @@ export async function GET(req: Request) {
     event: eventOf(p.event as unknown as EventRef),
     ticket: (() => {
       const t = ticketByHolder.get(p._id.toString());
-      return t ? { code: t.code, status: t.status, scannedAt: t.scannedAt ?? null } : null;
+      return t ? { id: t._id, code: t.code, status: t.status, scannedAt: t.scannedAt ?? null } : null;
     })(),
   }));
 
@@ -103,14 +105,15 @@ export async function GET(req: Request) {
      the live Guest link, which checked-in snapshots no longer have — so skip
      them entirely when it's active. */
   const attended =
-    plusOne || (status && status !== "COMPLETE")
+    plusOne || registrationStatus || (status && status !== "COMPLETE")
       ? []
       : await Ticket.find(holderFilter)
           .sort({ scannedAt: -1 })
-          .limit(500)
-          .populate("event", "name startTime status");
+                .populate("event", "name startTime status");
 
-  const archived = attended.map((t) => {
+  const existingHolders = attended.length ? await Participant.find({ _id: { $in: attended.map((ticket) => ticket.holderId) } }).select("_id") : [];
+  const existingIds = new Set(existingHolders.map((person) => person._id.toString()));
+  const archived = attended.filter((ticket) => !existingIds.has(ticket.holderId.toString()) && (!stack || ticket.holder?.label === stack)).map((t) => {
     const h = t.holder!;
     return {
       id: t._id,
@@ -123,7 +126,7 @@ export async function GET(req: Request) {
       status: "COMPLETE",
       profilePicture: h.photoUrl ?? null,
       event: eventOf(t.event as unknown as EventRef),
-      ticket: { code: t.code, status: t.status, scannedAt: t.scannedAt ?? null },
+      ticket: { id: t._id, code: t.code, status: t.status, scannedAt: t.scannedAt ?? null },
     };
   });
 
@@ -132,8 +135,8 @@ export async function GET(req: Request) {
 
 const CreateBody = z.object({
   eventId: z.string().min(1),
-  name: z.string().min(2),
-  email: z.string().email(),
+  name: z.string().trim().min(2),
+  email: z.string().trim().toLowerCase().email(),
   phone: z.string().min(6).optional(),
   stack: z.enum(STACKS).optional(),
   gender: z.enum(GENDERS).optional(),
@@ -151,6 +154,7 @@ export async function POST(req: Request) {
   await dbConnect();
   const event = await Event.findById(parsed.data.eventId);
   if (!event) return fail("Event not found", 404);
+  if (event.archivedAt) return fail("Choose an event that has not been archived", 409);
 
   try {
     const p = await Participant.create({
@@ -163,7 +167,17 @@ export async function POST(req: Request) {
       status: "PENDING",
       registrationStatus: "APPROVED",
     });
-    return ok({ participant: { id: p._id, name: p.name, email: p.email } }, 201);
+    let invitationSent = false;
+    let invitationError: string | undefined;
+    try {
+      await sendParticipantInvitation(p, event.name);
+      invitationSent = true;
+    } catch (err) {
+      // Keep the saved registration so an email failure cannot cause duplicate submissions.
+      console.error("participant invitation email failed", err);
+      invitationError = err instanceof Error ? err.message : "Invitation could not be sent.";
+    }
+    return ok({ participant: { id: p._id, name: p.name, email: p.email }, invitationSent, invitationError }, 201);
   } catch (err: unknown) {
     if (err && typeof err === "object" && "code" in err && err.code === 11000) {
       return fail("That email is already registered for this event", 409);

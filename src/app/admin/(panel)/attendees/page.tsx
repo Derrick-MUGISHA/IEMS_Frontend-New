@@ -1,14 +1,17 @@
 "use client";
 
+import { AdminListSkeleton } from "@/components/admin/PageSkeletons";
+
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, MoreHorizontal, Check, X, Eye, Trash2, UserPlus, Users } from "lucide-react";
+import { Download, Check, X, Eye, Trash2, UserPlus, Upload, Pencil, Mail } from "lucide-react";
 import {
   useParticipants,
   useSetRegistrationStatus,
   useDeleteParticipant,
   useExportParticipants,
+  useSendParticipantInvitations,
 } from "@/hooks/admin/participants";
 import {
   PARTICIPANT_STATUSES,
@@ -16,21 +19,17 @@ import {
   STACKS,
   type AdminParticipant,
 } from "@/types/admin";
+import { downloadCsv } from "@/lib/tableExport";
+import { canSendParticipantInvitation } from "@/lib/participantInvitationEligibility";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EventPicker } from "@/components/admin/EventPicker";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   Select,
   SelectContent,
@@ -69,6 +68,7 @@ function ParticipantsInner() {
   const setReg = useSetRegistrationStatus();
   const del = useDeleteParticipant();
   const exportCsv = useExportParticipants();
+  const invitations = useSendParticipantInvitations();
 
   const columns: Column<AdminParticipant>[] = [
     {
@@ -82,8 +82,8 @@ function ParticipantsInner() {
             <AvatarFallback>{initials(p.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{p.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{p.email}</p>
+            <p className="min-w-40 break-words font-semibold text-foreground">{p.name}</p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">{p.email}</p>
           </div>
         </div>
       ),
@@ -125,66 +125,18 @@ function ParticipantsInner() {
     },
     {
       id: "actions",
-      header: "",
-      headerClassName: "w-10",
-      cell: (p) =>
-        p.registrationStatus ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={() => router.push(`/admin/attendees/${p.id}`)}>
-                <Eye className="size-4" />
-                View
-              </DropdownMenuItem>
-              {p.registrationStatus !== "APPROVED" && (
-                <DropdownMenuItem
-                  disabled={setReg.isPending}
-                  onClick={() => setReg.mutate({ id: p.id, registrationStatus: "APPROVED" })}
-                >
-                  <Check className="size-4" />
-                  Approve
-                </DropdownMenuItem>
-              )}
-              {p.registrationStatus !== "REJECTED" && (
-                <DropdownMenuItem
-                  disabled={setReg.isPending}
-                  onClick={() => setReg.mutate({ id: p.id, registrationStatus: "REJECTED" })}
-                >
-                  <X className="size-4" />
-                  Reject
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <ConfirmDialog
-                trigger={
-                  <DropdownMenuItem
-                    onSelect={(e) => e.preventDefault()}
-                    className="text-red-600 focus:text-red-600"
-                  >
-                    <Trash2 className="size-4" />
-                    Delete
-                  </DropdownMenuItem>
-                }
-                title="Delete this participant?"
-                description="Removes the participant, their plus-one and tickets. Frees any held seats."
-                confirmLabel="Delete"
-                destructive
-                onConfirm={async () => {
-                  await del.mutateAsync(p.id);
-                }}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null,
+      header: "Actions",
+      headerClassName: "w-36",
+      cell: (p) => <div onClick={(event) => event.stopPropagation()}><ActionMenu actions={[
+        { label: "View participant", icon: <Eye className="size-4" />, run: () => router.push(p.registrationStatus ? `/admin/attendees/${p.id}` : `/admin/tickets/${p.ticket?.id ?? p.id}`) },
+        ...(p.registrationStatus ? [
+          { label: "Edit participant", icon: <Pencil className="size-4" />, run: () => router.push(`/admin/attendees/${p.id}/edit`) },
+          ...(canSendParticipantInvitation(p) ? [{ label: "Send invitation", icon: <Mail className="size-4" />, disabled: invitations.isPending, run: () => invitations.mutateAsync([p.id]) }] : []),
+          { label: "Approve", icon: <Check className="size-4" />, disabled: p.registrationStatus === "APPROVED", run: () => setReg.mutateAsync({ id: p.id, registrationStatus: "APPROVED" }) },
+          { label: "Reject", icon: <X className="size-4" />, disabled: p.registrationStatus === "REJECTED", run: () => setReg.mutateAsync({ id: p.id, registrationStatus: "REJECTED" }) },
+          { label: "Delete participant", icon: <Trash2 className="size-4" />, confirm: { title: "Delete this participant?", description: "Removes their registration, plus-one and tickets.", destructive: true }, run: () => del.mutateAsync(p.id) },
+        ] : []),
+      ]} /></div>,
     },
   ];
 
@@ -203,6 +155,7 @@ function ParticipantsInner() {
               <Download className="size-4" />
               Export CSV
             </Button>
+            <Button variant="outline" asChild><Link href="/admin/attendees/import"><Upload />Import CSV / paste</Link></Button>
             <Button asChild>
               <Link href="/admin/attendees/new">
                 <UserPlus className="size-4" />
@@ -213,41 +166,38 @@ function ParticipantsInner() {
         }
       />
 
-      {isPending ? (
-        <TableSkeleton cols={7} />
-      ) : error ? (
+      {!!invitations.data?.failed.length && <div role="alert" className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
+        <p>{invitations.data.failed.length} invitations failed. {invitations.data.failed[0].error}</p>
+        <Button type="button" variant="outline" size="sm" className="mt-3" disabled={invitations.isPending} onClick={() => invitations.mutate(invitations.data!.failed.map((item) => item.id))}>Retry failed invitations</Button>
+      </div>}
+
+      {error ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
-      ) : (data ?? []).length === 0 ? (
-        <EmptyState
-          icon={<Users className="size-5" />}
-          title="No participants"
-          message="No one matches these filters yet."
-          action={
-            <Button asChild>
-              <Link href="/admin/attendees/new">
-                <UserPlus className="size-4" />
-                Add participant
-              </Link>
-            </Button>
-          }
-        />
       ) : (
         <DataTable
+          loading={isPending}
           data={data ?? []}
           columns={columns}
           getRowId={(p) => p.id}
-          onRowClick={(p) => p.registrationStatus && router.push(`/admin/attendees/${p.id}`)}
+          onRowClick={(p) => router.push(p.registrationStatus ? `/admin/attendees/${p.id}` : `/admin/tickets/${p.ticket?.id ?? p.id}`)}
           searchable={(p) => `${p.name} ${p.email} ${p.phone ?? ""}`}
           searchPlaceholder="Search participants…"
-          pageSize={12}
+          pageSize={25}
+          selectionActions={(selected) => <>
+            <Button variant="outline" size="sm" disabled={invitations.isPending || !selected.some(canSendParticipantInvitation)} onClick={() => invitations.mutate(selected.filter(canSendParticipantInvitation).map((p) => p.id))}><Mail />{invitations.isPending ? "Sending invitations…" : `Invite unverified (${selected.filter(canSendParticipantInvitation).length})`}</Button>
+            <Button variant="outline" size="sm" onClick={() => downloadCsv("selected-participants.csv", ["Name", "Email", "Phone", "Event", "Registration", "Ticket"], selected.map((person) => [person.name, person.email, person.phone, person.event?.name, person.registrationStatus ?? "Archived", person.ticket?.status]))}><Download />Export selected</Button>
+          </>}
           toolbar={
             <>
+              {(event !== "all" || registration !== "all" || status !== "all" || stack !== "all" || plusOne !== "all") && <Button variant="outline" size="sm" onClick={() => { setEvent("all"); setRegistration("all"); setStatus("all"); setStack("all"); setPlusOne("all"); }}><X />Clear filters</Button>}
               <EventPicker
                 value={event}
                 onValueChange={setEvent}
                 includeAll
                 className="h-9 w-42.5"
               />
+
+
               <Select value={registration} onValueChange={setRegistration}>
                 <SelectTrigger className="h-9 w-37.5">
                   <SelectValue placeholder="Registration" />
@@ -307,7 +257,7 @@ function ParticipantsInner() {
 
 export default function ParticipantsPage() {
   return (
-    <Suspense fallback={<TableSkeleton cols={7} />}>
+    <Suspense fallback={<AdminListSkeleton kind="participants" />}>
       <ParticipantsInner />
     </Suspense>
   );

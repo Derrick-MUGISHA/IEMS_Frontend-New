@@ -10,7 +10,7 @@ export default function ApiDocsPage() {
   const { isAuthenticated } = useRequireAuth("admin", "/admin");
   if (!isAuthenticated) return null;
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background text-foreground">
       <ApiDocs />
     </div>
   );

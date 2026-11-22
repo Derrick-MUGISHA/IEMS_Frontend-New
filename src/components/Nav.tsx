@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as SdkButton } from "@ui-sdk/react/button";
+
 import { useState } from "react";
 import Image from "next/image";
 // import Link from "next/link";
@@ -43,22 +45,6 @@ const MENU = [
   },
 ];
 
-/* Rough paint-smear backdrop for the Attend our events button */
-function Smear({ className }: { className: string }) {
-  return (
-    <svg
-      viewBox="0 0 156 44"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-      className={className}
-    >
-      <path
-        d="M8 14 Q2 4 18 5 L134 2 Q152 1 149 13 L152 29 Q154 41 138 39 L16 42 Q3 44 6 31 Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 function Arrow({
   className,
@@ -107,10 +93,10 @@ export default function Nav() {
       {/* four divisions — menu, logo, next event, CTA — share the row
           evenly, with equal space left over between each */}
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:h-20 sm:gap-4 sm:px-5">
-        <button
+        <SdkButton
           type="button"
           onClick={openMenu}
-          className="flex items-center gap-3 text-cream transition-colors hover:text-orange"
+          className="public-action flex items-center gap-3 text-cream transition-colors hover:text-orange"
           aria-expanded={open}
           aria-label="Open menu"
         >
@@ -128,7 +114,7 @@ export default function Nav() {
           <span className="label hidden text-sm font-semibold sm:block">
             Menu
           </span>
-        </button>
+        </SdkButton>
 
         <a
           href="#"
@@ -163,10 +149,10 @@ export default function Nav() {
           </span>
         )}
         {upNext && (
-          <button
+          <SdkButton
             type="button"
             onClick={() => openEvent(upNext)}
-            className="flex cursor-pointer items-center gap-2.5 text-left"
+            className="public-action flex cursor-pointer items-center gap-2.5 text-left"
             title={`${upNext.title} — ${upNext.time}, ${upNext.space}`}
             aria-label={`Next event: ${upNext.title}, ${upNext.time}`}
           >
@@ -192,7 +178,7 @@ export default function Nav() {
                 · {upNext.time}
               </span>
             </span>
-          </button>
+          </SdkButton>
         )}
 
         {/* <Link
@@ -202,26 +188,25 @@ export default function Nav() {
           Get your ticket
         </Link> */}
 
-        <a
-          href="#calendar"
-          className="group relative hidden px-5 py-2.5 text-sm font-semibold text-bg sm:block"
+        <SdkButton
+          render={<a href="#calendar" />}
+          className="public-action hidden items-center justify-center rounded-md bg-orange px-5 py-2.5 text-sm font-semibold text-bg transition-colors hover:bg-orange-deep sm:inline-flex"
         >
-          <Smear className="absolute inset-0 h-full w-full -rotate-1 text-orange transition-colors group-hover:text-orange-deep" />
           <span className="relative flex items-center gap-2">
             Attend our events
             <Arrow className="h-4 w-4" />
           </span>
-        </a>
+        </SdkButton>
 
         {/* compact CTA for phones — keeps the primary action reachable where the
             full "Attend our events" button doesn't fit */}
-        <a
-          href="#calendar"
+        <SdkButton
+          render={<a href="#calendar" />}
           aria-label="Attend our events"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange text-bg transition-colors hover:bg-orange-deep sm:hidden"
+          className="public-action flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange text-bg transition-colors hover:bg-orange-deep sm:hidden"
         >
           <Arrow className="h-5 w-5" />
-        </a>
+        </SdkButton>
       </nav>
 
       {/* Slide-out menu: a dark left panel on its own; the coloured
@@ -247,11 +232,11 @@ export default function Nav() {
           >
             {/* left: main links */}
             <div className="relative flex min-h-[60vh] flex-1 flex-col bg-bg p-6 sm:p-10 md:w-[36vw] md:min-w-88 md:flex-none">
-              <button
+              <SdkButton
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close menu"
-                className="text-cream transition-colors hover:text-orange"
+                className="public-action text-cream transition-colors hover:text-orange"
               >
                 <svg
                   width="30"
@@ -264,7 +249,7 @@ export default function Nav() {
                 >
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>
-              </button>
+              </SdkButton>
 
               <Image
                 src="/iro-logo.svg"
@@ -277,13 +262,13 @@ export default function Nav() {
               <ul className="mt-auto space-y-1 pt-16">
                 {MENU.map((entry, i) => (
                   <li key={entry.name}>
-                    <button
+                    <SdkButton
                       type="button"
                       onClick={() => setActive(i)}
                       onMouseEnter={() => setActive(i)}
                       onFocus={() => setActive(i)}
                       aria-expanded={active === i}
-                      className="group flex w-full items-center justify-between py-2.5 text-left"
+                      className="public-action group flex w-full items-center justify-between py-2.5 text-left"
                     >
                       <span className="flex items-center gap-4">
                         {/* legend dot, same swatch as the events calendar */}
@@ -316,7 +301,7 @@ export default function Nav() {
                           style={{ color: entry.color }}
                         />
                       )}
-                    </button>
+                    </SdkButton>
                   </li>
                 ))}
               </ul>

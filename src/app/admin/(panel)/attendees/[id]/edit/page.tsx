@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminFormSkeleton } from "@/components/admin/PageSkeletons";
+
 import { use, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -8,7 +10,7 @@ import { useParticipant, useUpdateParticipant } from "@/hooks/admin/participants
 import { participantEditSchema, type ParticipantEditValues } from "@/schemas/admin";
 import { STACKS, GENDERS, REGISTRATION_STATUSES } from "@/types/admin";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { TableSkeleton, EmptyState } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +33,7 @@ import {
 export default function EditParticipantPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, isPending } = useParticipant(id);
+  const { data, isPending, error, refetch } = useParticipant(id);
   const update = useUpdateParticipant();
   const form = useForm<ParticipantEditValues>({ resolver: zodResolver(participantEditSchema) });
 
@@ -42,24 +44,28 @@ export default function EditParticipantPage({ params }: { params: Promise<{ id: 
         name: p.name,
         email: p.email,
         phone: p.phone ?? "",
-        stack: p.stack ?? undefined,
-        gender: p.gender ?? undefined,
+        stack: p.stack ?? null,
+        gender: p.gender ?? null,
         registrationStatus: p.registrationStatus,
       });
   }, [p, form]);
 
-  if (isPending) return <TableSkeleton rows={4} cols={2} />;
+  if (isPending) return <AdminFormSkeleton kind="participant" fields={6} />;
+  if (error) return <ErrorState message={error.message} onRetry={() => refetch()} />;
   if (!p) return <EmptyState title="Participant not found" />;
 
   async function onSubmit(v: ParticipantEditValues) {
-    await update.mutateAsync({ id, body: { ...v, phone: v.phone || undefined } });
-    router.push(`/admin/attendees/${id}`);
+    try {
+      await update.mutateAsync({ id, body: { ...v, phone: v.phone ?? "" } });
+      router.push(`/admin/attendees/${id}`);
+    } catch { /* The mutation displays the API error; preserve the form. */ }
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="w-full">
       <PageHeader
         title="Edit participant"
+        description="Update contact information and registration approval. Clearing an optional field removes it."
         crumbs={[
           { label: "Participants", href: "/admin/attendees" },
           { label: p.name, href: `/admin/attendees/${id}` },
@@ -70,7 +76,8 @@ export default function EditParticipantPage({ params }: { params: Promise<{ id: 
         <CardContent className="pt-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
+              <fieldset disabled={update.isPending}>
+              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="name"
@@ -116,13 +123,13 @@ export default function EditParticipantPage({ params }: { params: Promise<{ id: 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Stack</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select value={field.value ?? "none"} onValueChange={(value) => field.onChange(value === "none" ? null : value)}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Choose" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent><SelectItem value="none">Not specified</SelectItem>
                           {STACKS.map((s) => (
                             <SelectItem key={s} value={s}>
                               {s}
@@ -140,13 +147,13 @@ export default function EditParticipantPage({ params }: { params: Promise<{ id: 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Gender</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select value={field.value ?? "none"} onValueChange={(value) => field.onChange(value === "none" ? null : value)}>
                         <FormControl>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Choose" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent><SelectItem value="none">Not specified</SelectItem>
                           {GENDERS.map((g) => (
                             <SelectItem key={g} value={g}>
                               {g}
@@ -183,7 +190,8 @@ export default function EditParticipantPage({ params }: { params: Promise<{ id: 
                   )}
                 />
               </div>
-              <div className="flex justify-end gap-2">
+              </fieldset>
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"

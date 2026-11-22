@@ -74,16 +74,12 @@ async function timed(name: string, run: () => Promise<string>): Promise<Service>
   }
 }
 
-/* Admin: live status of the external services the app depends on — surfaced
-   on the dashboard so an outage is obvious without reading server logs. */
-export async function GET(req: Request) {
-  const admin = await requireAdmin(req);
-  if (!admin) return unauthorized();
-
+async function checkHealth() {
   await dbConnect();
 
   const hourAgo = new Date(Date.now() - 3_600_000);
-  const dayAgo = new Date(Date.now() - 86_400_000);
+  const localDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kigali", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const dayAgo = new Date(`${localDay}T00:00:00+02:00`);
 
   const [services, ticketsQueued, pendingVerifications, unticketedApproved, scansLastHour, scansToday] =
     await Promise.all([
@@ -102,7 +98,7 @@ export async function GET(req: Request) {
         }),
       ]),
       /* the async email/PDF pipeline: tickets issued but not yet marked sent */
-      Ticket.countDocuments({ sentAt: null }),
+      Ticket.countDocuments({ sentAt: null, status: { $ne: "REVOKED" } }),
       Participant.countDocuments({ status: "PENDING" }),
       Participant.countDocuments({ status: { $in: ["VERIFIED"] }, ticket: null }),
       ScanLog.countDocuments({ createdAt: { $gt: hourAgo } }),
@@ -117,7 +113,7 @@ export async function GET(req: Request) {
 
   const uptime = await computeUptime(services.map((s) => s.name));
 
-  return ok({
+  return {
     ok: services.every((s) => s.ok),
     services,
     checkedAt: new Date().toISOString(),
@@ -133,5 +129,20 @@ export async function GET(req: Request) {
       scansToday,
     },
     uptime,
-  });
+  };
+}
+
+let report: { until: number; value: ReturnType<typeof checkHealth> } | undefined;
+
+export async function GET(req: Request) {
+  const admin = await requireAdmin(req);
+  if (!admin) return unauthorized();
+  if (!report || report.until <= Date.now()) {
+    const current = { until: Date.now() + 30_000, value: checkHealth() };
+    report = current;
+    void current.value.catch(() => { if (report === current) report = undefined; });
+  }
+  const response = ok(await report.value);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }

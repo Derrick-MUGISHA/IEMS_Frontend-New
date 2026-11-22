@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as SdkButton } from "@ui-sdk/react/button";
+
 import {
   createContext,
   useCallback,
@@ -93,15 +95,19 @@ export function EventFlowProvider({ children }: { children: React.ReactNode }) {
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-lg overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl"
             >
-              <div className="h-1.5 w-full bg-orange" />
               {/* the event's poster leads the dialog when one is uploaded */}
               {event.posterUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={event.posterUrl}
-                  alt={`${event.title} poster`}
-                  className="max-h-52 w-full object-cover"
-                />
+                <div className="relative h-52 overflow-hidden bg-panel-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={event.posterUrl} alt="" aria-hidden="true" className="event-poster-reflection" />
+                  <div className="event-poster-frost" aria-hidden="true" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={event.posterUrl}
+                    alt={`${event.title} poster`}
+                    className="featured-event-image"
+                  />
+                </div>
               )}
               <div className="max-h-[80vh] overflow-y-auto p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-4">
@@ -124,11 +130,11 @@ export function EventFlowProvider({ children }: { children: React.ReactNode }) {
                       {event.endTime && ` – ${event.endTime}`} · {event.space}
                     </p>
                   </div>
-                  <button
+                  <SdkButton
                     type="button"
                     onClick={close}
                     aria-label="Close"
-                    className="shrink-0 text-cream-dim transition-colors hover:text-orange"
+                    className="public-action shrink-0 text-cream-dim transition-colors hover:text-orange"
                   >
                     <svg
                       width="24"
@@ -141,7 +147,7 @@ export function EventFlowProvider({ children }: { children: React.ReactNode }) {
                     >
                       <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
-                  </button>
+                  </SdkButton>
                 </div>
 
                 <p className="mt-5 text-sm text-cream-dim">
@@ -182,21 +188,21 @@ export function EventFlowProvider({ children }: { children: React.ReactNode }) {
                 </label>
 
                 <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                  <button
+                  <SdkButton
                     type="button"
                     onClick={close}
-                    className="cursor-pointer rounded-lg border border-line bg-panel-2 px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:border-orange hover:text-orange"
+                    className="public-action cursor-pointer rounded-lg border border-line bg-panel-2 px-5 py-2.5 text-sm font-semibold text-cream transition-colors hover:border-orange hover:text-orange"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </SdkButton>
+                  <SdkButton
                     type="button"
                     onClick={proceed}
                     disabled={!agreed}
-                    className="cursor-pointer rounded-lg bg-orange px-5 py-2.5 text-sm font-semibold text-bg transition-colors enabled:hover:bg-orange-deep disabled:cursor-not-allowed disabled:opacity-40"
+                    className="public-action cursor-pointer rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Agree &amp; continue
-                  </button>
+                  </SdkButton>
                 </div>
               </div>
             </motion.div>

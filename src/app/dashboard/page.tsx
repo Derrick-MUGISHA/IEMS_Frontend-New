@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { decodeJwt } from "jose";
 import { motion } from "motion/react";
 import { api, ApiError } from "@/lib/client";
 import { useRequireAuth } from "@/context/AuthContext";
@@ -14,7 +16,8 @@ import {
   StatusBadge,
   SkeletonBar,
 } from "@/components/portal/ui";
-import IdCard from "@/components/portal/IdCard";
+import { TicketPdf, TicketSkeleton } from "@/components/portal/TicketPdf";
+import type { TicketArtworkData } from "@/components/admin/TicketArtwork";
 import ShareLinks from "@/components/portal/ShareLinks";
 import Confetti from "@/components/portal/Confetti";
 import { RichText } from "@/components/RichText";
@@ -42,7 +45,7 @@ type Me = {
     about: string;
     rules: string[];
   } | null;
-  ticket: { code: string; status: string; qrDataUrl: string } | null;
+  ticket: { id: string; ticketNumber: string; code: string; status: string; preview?: TicketArtworkData } | null;
   plusOne: {
     fullName: string;
     email: string;
@@ -76,53 +79,33 @@ const cardMotion = (i: number) => ({
 
 function DashboardSkeleton() {
   return (
-    <div role="status" aria-label="Loading your dashboard" className="grid gap-6 md:grid-cols-2">
-      {[0, 1].map((i) => (
-        <div key={i} className="rounded-xl border border-line bg-panel p-6">
-          <SkeletonBar className="h-3 w-24" />
-          <div className="mt-5 flex items-center gap-4">
-            <div className="h-20 w-20 animate-pulse rounded-xl bg-panel-2" />
-            <div className="flex-1 space-y-2">
-              <SkeletonBar className="h-4 w-3/4" />
-              <SkeletonBar className="h-3 w-1/2" />
-              <SkeletonBar className="h-3 w-2/3" />
-            </div>
-          </div>
-          <SkeletonBar className="mt-6 h-10 w-full" />
-        </div>
-      ))}
-      <span className="sr-only">Loading your dashboard…</span>
+    <div aria-label="Loading your dashboard" className="space-y-6">
+      <TicketSkeleton />
+      <div className="rounded-xl border border-line bg-panel p-6 text-left"><SkeletonBar className="h-3 w-32" /><SkeletonBar className="mt-5 h-4 w-3/4" /><div className="mt-4 flex gap-3"><SkeletonBar className="h-11 w-40" /><SkeletonBar className="h-11 w-40" /></div></div>
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const { isAuthenticated } = useRequireAuth("participant", "/verify");
-  const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState("");
+  const { isAuthenticated, session } = useRequireAuth("participant", "/verify");
+  const participantId = useMemo(() => {
+    try { return decodeJwt(session.token ?? "").sub; } catch { return undefined; }
+  }, [session.token]);
+  const { data: me, error, refetch: load } = useQuery({
+    queryKey: ["participant", "dashboard", participantId],
+    queryFn: () => api<Me>("/api/me", { role: "participant" }),
+    enabled: isAuthenticated && !!participantId,
+    staleTime: 30_000,
+    meta: { persist: false },
+  });
   /* set the moment a pass is generated, so the celebration only fires once */
   const [celebrate, setCelebrate] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      setMe(await api<Me>("/api/me", { role: "participant" }));
-    } catch (err) {
-      /* a 401 is handled by the request layer (refresh → sign-out), which trips
-         the guard above; anything else is a real error to surface */
-      if (err instanceof ApiError && err.status === 401) return;
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) load();
-  }, [isAuthenticated, load]);
-
-  if (error)
+  if (error && !me)
     return (
       <PortalShell eyebrow="Ticket portal" title="Dashboard">
         <Panel>
-          <Note tone="error">{error}</Note>
+          <Note tone="error">{error.message}</Note>
         </Panel>
       </PortalShell>
     );
@@ -145,20 +128,10 @@ export default function DashboardPage() {
         <Confetti fire={celebrate} />
         <div className="space-y-6">
           <motion.div {...cardMotion(0)}>
-            <IdCard
-              name={me.attendee.fullName}
-              role={me.attendee.roleLine}
-              type={me.attendee.type}
-              photoUrl={me.attendee.photoUrl}
-              eventName={me.event?.name ?? "Event"}
-              eventDate={me.event?.date}
-              venue={me.event?.venue}
-              qrDataUrl={me.ticket.qrDataUrl}
-              code={me.ticket.code}
-              status={me.ticket.status}
-            />
+            <TicketPdf src={`/api/tickets/${me.ticket.id}/download`} role="participant"
+              preview={me.ticket.preview} revision={`${me.ticket.code}:${me.ticket.status}`} filename={`ticket-${me.ticket.ticketNumber}.pdf`} />
             <p className="mt-3 text-center text-xs text-cream-dim">
-              Your pass was also emailed to you with a printable PDF ticket.
+              The same ticket was attached to your confirmation email.
             </p>
           </motion.div>
           {me.attendee.type === "PARTICIPANT" && (
@@ -301,8 +274,7 @@ function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
             ))}
           </Select>
         )}
-        {/* participants add a real photo of themselves — this becomes the face
-            on their pass, matched against them at the gate */}
+        {/* The gate operator uses this profile photo to confirm identity. */}
         <div className="flex items-center gap-4">
           {preview ? (
             /* eslint-disable-next-line @next/next/no-img-element */

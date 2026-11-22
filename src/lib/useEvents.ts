@@ -11,8 +11,8 @@ export const apiClient = axios.create({
   headers: { Accept: "application/json" },
 });
 
-async function fetchEvents(): Promise<VenueEvent[]> {
-  const { data } = await apiClient.get<{ events: VenueEvent[] }>("/events");
+async function fetchEvents({ signal }: { signal: AbortSignal }): Promise<VenueEvent[]> {
+  const { data } = await apiClient.get<{ events: VenueEvent[] }>("/events", { signal });
   return data.events;
 }
 
@@ -26,13 +26,18 @@ export function useEvents() {
   useEffect(
     () =>
       subscribeEventsFeed(() => {
-        queryClient.invalidateQueries({ queryKey: ["events"] });
+        queryClient.invalidateQueries({ queryKey: ["events"] }, { cancelRefetch: false });
       }),
     [queryClient]
   );
   return useQuery({
     queryKey: ["events"],
     queryFn: fetchEvents,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    // Reconcile missed signals when publishing and SSE run on different server instances.
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
 }

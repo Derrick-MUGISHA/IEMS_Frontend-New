@@ -1,9 +1,11 @@
 "use client";
 
+import { RecipientSkeleton, EmailTemplatesSkeleton, EmailOverviewSkeleton } from "@/components/admin/PageSkeletons";
+import { Skeleton } from "@/components/ui/skeleton";
+
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  AlertTriangle,
-  CheckCircle2,
   Clock,
   Eye,
   Hourglass,
@@ -11,6 +13,17 @@ import {
   MailWarning,
   Send,
   UserX,
+  CalendarDays,
+  LayoutDashboard,
+  History,
+  ListFilter,
+  ShieldCheck,
+  X,
+  ArrowUpRight,
+  Mail,
+  FileText,
+  Users,
+  Check,
 } from "lucide-react";
 import {
   useEmailDetail,
@@ -20,19 +33,21 @@ import {
   useSendPassEmails,
 } from "@/hooks/admin/emails";
 import { useParticipants } from "@/hooks/admin/participants";
+import { useEvents } from "@/hooks/admin/events";
 import { EventPicker } from "@/components/admin/EventPicker";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { EventImage } from "@/components/admin/EventImage";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { DataTable, type Column } from "@/components/admin/DataTable";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -74,6 +89,20 @@ export default function EmailsPage() {
   const [logKind, setLogKind] = useState("all");
   const [logStatus, setLogStatus] = useState("all");
   const runReminders = useRunReminders();
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [reminderEventId, setReminderEventId] = useState("");
+  const { data: events } = useEvents();
+  const reminderEvent = events?.find((event) => event.id === reminderEventId);
+  const canRemind = Boolean(reminderEvent && reminderEvent.status === "OPEN" && new Date(reminderEvent.startTime) > new Date());
+
+  async function sendReminders() {
+    if (!canRemind) return;
+    try {
+      await runReminders.mutateAsync(reminderEventId);
+      setRemindersOpen(false);
+      setReminderEventId("");
+    } catch { /* The mutation displays the send error; keep the selection for retry. */ }
+  }
 
   const logFilters = {
     kind: logKind === "all" ? undefined : logKind,
@@ -90,24 +119,46 @@ export default function EmailsPage() {
     <div className="w-full">
       <PageHeader
         title="Emails"
+        description="Manage event messages, preview the emails people receive, and track delivery."
         crumbs={[{ label: "Emails" }]}
         actions={
-          <ConfirmDialog
-            trigger={
-              <Button variant="outline" disabled={runReminders.isPending}>
-                <MailCheck className="size-4" />
-                {runReminders.isPending ? "Sending…" : "Send progress reminders"}
-              </Button>
-            }
-            title="Send progress reminders now?"
-            description="Emails a status-aware nudge to every participant of an upcoming open event who still has a step to finish — verify their email, complete their profile, or invite a plus-one. People reminded in the last 20 hours are skipped. This is the same job that runs automatically each day."
-            confirmLabel="Send reminders"
-            onConfirm={async () => {
-              await runReminders.mutateAsync();
-            }}
-          />
+          <Button onClick={() => setRemindersOpen(true)} disabled={runReminders.isPending}>
+            <MailCheck aria-hidden="true" className="size-4" />
+            {runReminders.isPending ? "Sending…" : "Send progress reminders"}
+          </Button>
         }
       />
+
+      <Dialog open={remindersOpen} onOpenChange={(open) => { if (!runReminders.isPending) setRemindersOpen(open); }}>
+        <DialogContent className="email-reminders-dialog">
+          <DialogHeader>
+            <span className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"><MailCheck aria-hidden="true" className="size-6" /></span>
+            <DialogTitle className="text-xl">Send progress reminders</DialogTitle>
+            <DialogDescription>Choose the programme or event, review its details, then send a reminder for each participant’s next step.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reminder-event"><CalendarDays aria-hidden="true" className="size-4" />Programme / event</Label>
+            <EventPicker id="reminder-event" value={reminderEventId} onValueChange={setReminderEventId} disabled={runReminders.isPending} placeholder="Choose a programme or event" className="w-full" />
+          </div>
+          {reminderEvent && (
+            <div className="space-y-4 rounded-xl border bg-muted/30 p-4 text-sm">
+              <div className="flex items-center gap-3">
+                <EventImage thumbnail images={reminderEvent.gallery} name={reminderEvent.name} className="h-16 w-24" />
+                <div className="min-w-0"><p className="font-semibold">{reminderEvent.name}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(reminderEvent.startTime).toLocaleDateString()} · {reminderEvent.location || "Venue pending"}</p></div>
+              </div>
+              <p className="text-muted-foreground">{canRemind ? "Only this programme’s eligible participants will be contacted. Rejected registrations and people reminded in the last 20 hours are skipped." : "Reminders are available for upcoming, open programmes and events. Choose another event."}</p>
+            </div>
+          )}
+          <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 p-3 text-sm">
+            <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <p>Review the selected programme before sending. This action emails eligible participants immediately.</p>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" disabled={runReminders.isPending} onClick={() => setRemindersOpen(false)}><X aria-hidden="true" className="size-4" />Cancel</Button>
+            <Button disabled={!canRemind || runReminders.isPending} onClick={() => void sendReminders()}><Send aria-hidden="true" className="size-4" />{runReminders.isPending ? "Sending…" : "Send reminders"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -128,9 +179,9 @@ export default function EmailsPage() {
         />
         <StatCard
           icon={Hourglass}
-          label="Going to be sent"
+          label="Awaiting delivery or action"
           value={report?.upcoming.total ?? 0}
-          hint="queued by where people are in the flow"
+          hint="passes pending and unfinished registrations"
           tone="blue"
           loading={isPending}
         />
@@ -149,16 +200,16 @@ export default function EmailsPage() {
       </div>
 
       <Tabs defaultValue="overview" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="send">Send passes</TabsTrigger>
-          <TabsTrigger value="templates">What users see</TabsTrigger>
-          <TabsTrigger value="log">Send log</TabsTrigger>
+        <TabsList className="email-tabs-list" aria-label="Email management">
+          <TabsTrigger value="overview"><LayoutDashboard aria-hidden="true" className="size-5" /><span className="text-left"><span className="block font-semibold">Overview</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Delivery &amp; registration</span></span></TabsTrigger>
+          <TabsTrigger value="send"><Send aria-hidden="true" className="size-5" /><span className="text-left"><span className="block font-semibold">Send passes</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Choose your recipients</span></span></TabsTrigger>
+          <TabsTrigger value="templates"><Eye aria-hidden="true" className="size-5" /><span className="text-left"><span className="block font-semibold">What users see</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Preview every email</span></span></TabsTrigger>
+          <TabsTrigger value="log"><History aria-hidden="true" className="size-5" /><span className="text-left"><span className="block font-semibold">Send log</span><span className="mt-1 block text-xs font-normal text-muted-foreground">History &amp; delivery errors</span></span></TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
           {isPending || !report ? (
-            <TableSkeleton rows={5} cols={4} />
+            <EmailOverviewSkeleton />
           ) : (
             <>
               <div className="grid gap-4 lg:grid-cols-2">
@@ -202,46 +253,55 @@ function UpcomingCard({ report }: { report: NonNullable<ReturnType<typeof useEma
   const rows = [
     {
       icon: Send,
-      label: "Passes issued, email still on its way",
-      hint: "ticket emails sending in the background or bounced",
+      label: "Pass delivery pending",
+      hint: "A pass exists, but a successful email delivery has not been recorded.",
+      status: "Delivery pending",
+      tone: "text-sky-400 bg-sky-500/10",
       value: report.upcoming.ticketQueued,
     },
     {
       icon: Clock,
-      label: "Waiting on email verification",
-      hint: "confirmation email goes out once they click their magic link",
+      label: "Email verification needed",
+      hint: "The participant must verify their email before registration can continue.",
+      status: "Participant action",
+      tone: "text-amber-400 bg-amber-500/10",
       value: report.upcoming.confirmationQueued,
     },
     {
       icon: Hourglass,
-      label: "Verified, profile unfinished",
-      hint: "pass email goes out the moment they complete their profile",
+      label: "Profile completion needed",
+      hint: "Their email is verified. Completing their profile triggers pass delivery.",
+      status: "Participant action",
+      tone: "text-violet-400 bg-violet-500/10",
       value: report.upcoming.awaitingTicketEmail,
     },
     {
       icon: MailCheck,
-      label: "Next reminder blast reaches",
-      hint: "participants registered to upcoming events",
+      label: "Upcoming event registrations",
+      hint: "Registrations linked to future events. Reminder eligibility is checked when sending.",
+      status: "Upcoming audience",
+      tone: "text-emerald-400 bg-emerald-500/10",
       value: report.upcoming.reminderPool,
     },
   ];
   return (
     <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Emails going to be sent</CardTitle>
-        <CardDescription>Derived from where people currently sit in the flow.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><Send aria-hidden="true" className="size-4" />Delivery &amp; next steps</CardTitle>
+        <CardDescription>See what is waiting, who needs to act, and what triggers the next email.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="grid flex-1 gap-3 sm:grid-cols-2">
         {rows.map((r) => (
-          <div key={r.label} className="flex items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <r.icon className="size-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{r.label}</p>
-              <p className="truncate text-xs text-muted-foreground">{r.hint}</p>
+          <div key={r.label} className="flex flex-col items-start gap-3 rounded-xl border bg-muted/20 p-4">
+            <div className="flex w-full items-center justify-between gap-3">
+              <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", r.tone)}><r.icon aria-hidden="true" className="size-5" /></span>
+              <span className="text-3xl font-semibold tabular-nums">{r.value}</span>
             </div>
-            <span className="display text-lg font-semibold tabular-nums">{r.value}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{r.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{r.hint}</p>
+            </div>
+            <span className={cn("rounded-full px-2 py-1 text-[11px] font-medium", r.tone)}>{r.status}</span>
           </div>
         ))}
       </CardContent>
@@ -251,27 +311,27 @@ function UpcomingCard({ report }: { report: NonNullable<ReturnType<typeof useEma
 
 function ByKindCard({ report }: { report: NonNullable<ReturnType<typeof useEmailReport>["data"]>["report"] }) {
   const kinds = Object.entries(report.totals.byKind) as [EmailKind, { sent: number; failed: number }][];
+  const attempts = report.totals.sent + report.totals.failed;
+  const rate = attempts ? Math.round(report.totals.sent / attempts * 100) : null;
   return (
     <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Sent by template</CardTitle>
-        <CardDescription>Every send attempt, split by email type.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><History aria-hidden="true" className="size-4" />Sent by template</CardTitle>
+        <CardDescription>Retained send attempts by template, including failures and success rate.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div className="mb-4 flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3">
+          <div><p className="text-xs text-muted-foreground">Successful send attempts</p><p className="mt-1 text-2xl font-semibold tabular-nums">{rate === null ? "—" : `${rate}%`}</p></div>
+          <span className="text-right text-xs text-muted-foreground">{report.totals.sent} sent<br/>{report.totals.failed} failed · {attempts} attempts</span>
+        </div>
+        <div className="mb-2 grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem] gap-2 text-[11px] font-medium text-muted-foreground"><span>Template</span><span className="text-right">Sent</span><span className="text-right">Failed</span><span className="text-right">Success</span></div>
+        <div className="divide-y divide-border">
           {kinds.map(([kind, n]) => (
-            <div key={kind} className="flex items-center justify-between gap-3 text-sm">
+            <div key={kind} className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem] items-center gap-2 py-3 text-sm">
               <span className="font-medium">{KIND_LABEL[kind]}</span>
-              <span className="flex items-center gap-2 tabular-nums">
-                <span className="flex items-center gap-1 text-green-700">
-                  <CheckCircle2 className="size-3.5" /> {n.sent}
-                </span>
-                {n.failed > 0 && (
-                  <span className="flex items-center gap-1 text-red-600">
-                    <AlertTriangle className="size-3.5" /> {n.failed}
-                  </span>
-                )}
-              </span>
+              <span className="text-right tabular-nums text-emerald-400">{n.sent}</span>
+              <span className={cn("text-right tabular-nums", n.failed ? "text-red-400" : "text-muted-foreground")}>{n.failed}</span>
+              <span className="text-right text-xs tabular-nums text-muted-foreground">{n.sent + n.failed ? `${Math.round(n.sent / (n.sent + n.failed) * 100)}%` : "—"}</span>
             </div>
           ))}
         </div>
@@ -283,7 +343,12 @@ function ByKindCard({ report }: { report: NonNullable<ReturnType<typeof useEmail
 function FunnelCard({ report }: { report: NonNullable<ReturnType<typeof useEmailReport>["data"]>["report"] }) {
   const o = report.funnel.overall;
   const columns: Column<(typeof report.funnel.perEvent)[number]>[] = [
-    { id: "event", header: "Event", cell: (r) => <span className="font-medium">{r.eventName}</span>, sortValue: (r) => r.eventName },
+    { id: "event", header: "Programme / event", cell: (r) => (
+      <div className="flex min-w-64 items-center gap-3 py-1">
+        <EventImage thumbnail images={r.gallery} name={r.eventName} className="h-14 w-20 rounded-lg" />
+        <div className="min-w-0"><Link href={`/admin/events/${r.eventId}`} className="font-medium hover:underline">{r.eventName}</Link><p className="mt-1 text-xs text-muted-foreground">{r.startTime ? new Date(r.startTime).toLocaleDateString() : "Date unavailable"} · {r.location || "Venue pending"}</p></div>
+      </div>
+    ), sortValue: (r) => r.eventName },
     { id: "started", header: "Started", cell: (r) => r.started, sortValue: (r) => r.started, className: "tabular-nums" },
     {
       id: "neverVerified",
@@ -303,22 +368,31 @@ function FunnelCard({ report }: { report: NonNullable<ReturnType<typeof useEmail
     {
       id: "rate",
       header: "Completion",
-      cell: (r) => `${r.started ? Math.round((r.completed / r.started) * 100) : 0}%`,
+      cell: (r) => <div className="email-funnel-progress w-24 space-y-1.5"><span className="text-xs font-semibold">{r.started ? Math.round((r.completed / r.started) * 100) : 0}%</span><Progress value={r.started ? r.completed / r.started * 100 : 0} /></div>,
       sortValue: (r) => (r.started ? r.completed / r.started : 0),
       className: "tabular-nums",
     },
+    { id: "participants", header: "", className: "w-14 text-center", cell: (r) => <Button variant="ghost" size="icon-sm" className="email-funnel-link" asChild><Link href={`/admin/attendees?event=${r.eventId}`} aria-label={`View participants for ${r.eventName}`}><ArrowUpRight aria-hidden="true" className="size-4 shrink-0" /></Link></Button> },
   ];
 
   return (
     <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Application funnel</CardTitle>
+        <CardTitle className="flex items-center gap-2"><ListFilter aria-hidden="true" className="size-4" />Application funnel</CardTitle>
         <CardDescription>
           People who clicked apply but never finished: {o.neverVerified} never verified their
           email, {o.verifiedNotCompleted} verified but never completed their profile.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {[
+            { label: "Applications started", value: o.started, icon: Users },
+            { label: "Awaiting verification", value: o.neverVerified, icon: Mail },
+            { label: "Profile incomplete", value: o.verifiedNotCompleted, icon: UserX },
+            { label: "Registration complete", value: o.completed, icon: Check },
+          ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-xl border bg-muted/20 p-3"><item.icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><div><p className="text-xl font-semibold tabular-nums">{item.value}</p><p className="text-xs text-muted-foreground">{item.label}</p></div></div>)}
+        </div>
         <div>
           <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
             <span>
@@ -333,6 +407,8 @@ function FunnelCard({ report }: { report: NonNullable<ReturnType<typeof useEmail
           columns={columns}
           getRowId={(r) => r.eventId}
           pageSize={8}
+          searchable={(row) => `${row.eventName} ${row.location ?? ""}`}
+          searchPlaceholder="Search programmes or events…"
           empty={<EmptyState title="No applications yet" message="Funnel numbers appear once people start registering." />}
         />
       </CardContent>
@@ -385,7 +461,7 @@ function SendTab() {
   return (
     <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Send passes by email</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Send aria-hidden="true" className="size-4" />Send passes by email</CardTitle>
         <CardDescription>
           Pick an event, choose everyone or a single person, and review before anything is sent.
           People who already hold a pass get it re-sent; people who never finished applying get a
@@ -421,7 +497,7 @@ function SendTab() {
         {!eventId ? (
           <EmptyState title="Choose an event" message="Participants of the selected event appear here." />
         ) : isPending ? (
-          <TableSkeleton rows={6} cols={4} />
+          <RecipientSkeleton />
         ) : list.length === 0 ? (
           <EmptyState title="No participants" message="Nobody has registered for this event yet." />
         ) : (
@@ -448,7 +524,7 @@ function SendTab() {
                     disabled={send.isPending}
                     onClick={() => setPendingIds([p.id])}
                   >
-                    Send
+                    <Send aria-hidden="true" className="size-4" />Send
                   </Button>
                 </div>
               );
@@ -520,45 +596,52 @@ function TemplatesTab() {
   }, [templates, selectedId]);
 
   if (error) return <ErrorState message="Couldn't load the templates." onRetry={refetch} />;
-  if (isPending) return <TableSkeleton rows={4} cols={2} />;
+  if (isPending) return <EmailTemplatesSkeleton />;
   if (!templates?.length)
     return <EmptyState title="No templates" message="No email templates were found." />;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr] lg:items-start">
-      {/* the template list scrolls in its own pane; the preview stays put */}
-      <div className="space-y-1.5 lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pr-1.5">
+    <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)] xl:items-start">
+      <div className="email-template-sidebar rounded-xl border bg-card p-3">
+        <div className="mb-3 flex shrink-0 items-center justify-between px-2 py-2"><p className="flex items-center gap-2 text-sm font-semibold"><FileText aria-hidden="true" className="size-4" />Email templates</p><Badge variant="outline">{templates.length}</Badge></div>
+        <div className="email-template-options grid gap-2 sm:grid-cols-2 xl:grid-cols-1 xl:pr-1">
         {templates.map((t) => (
           <button
             key={t.id}
             type="button"
+            aria-pressed={selected?.id === t.id}
             onClick={() => setSelectedId(t.id)}
             className={cn(
-              "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
+              "email-template-option flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               selected?.id === t.id
                 ? "border-primary/40 bg-primary/5"
                 : "border-transparent hover:bg-muted"
             )}
           >
-            <p className="text-sm font-medium">{t.name}</p>
-            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{t.description}</p>
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><Mail aria-hidden="true" className="size-4" /></span>
+            <span><span className="block text-sm font-medium">{t.name}</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{t.description}</span></span>
           </button>
         ))}
+        </div>
       </div>
       {selected && (
-        <Card className="shadow-none lg:sticky lg:top-4">
+        <Card className="min-w-0 shadow-none">
           <CardHeader>
-            <CardTitle className="text-base">{selected.name}</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2"><CardTitle className="flex items-center gap-2 text-base"><Eye aria-hidden="true" className="size-4" />{selected.name}</CardTitle><Badge variant="outline">Live template preview</Badge></div>
             <CardDescription>
               Subject: <span className="font-medium text-foreground">{selected.subject}</span>
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 text-xs sm:grid-cols-2">
+              <div><p className="text-muted-foreground">From</p><p className="mt-1 break-words font-medium">{selected.from || "Igire Rwanda Official Team <no-reply@igirerwanda.org>"}</p></div>
+              <div><p className="text-muted-foreground">Preview recipient</p><p className="mt-1 font-medium">Sample registration · personalised when sent</p></div>
+            </div>
             <iframe
               title={`${selected.name} preview`}
               srcDoc={selected.html}
               sandbox=""
-              className="h-[640px] w-full rounded-lg border bg-white lg:h-[calc(100vh-22rem)] lg:min-h-[420px]"
+              className="h-[900px] w-full rounded-none border-0 bg-transparent [color-scheme:dark]"
             />
             <p className="mt-2 text-xs text-muted-foreground">
               Rendered from the live template with sample data — recipients see exactly this
@@ -653,11 +736,11 @@ function LogTab({
     },
   ];
 
-  if (loading) return <TableSkeleton rows={8} cols={5} />;
 
   return (
     <DataTable
       data={logs}
+      loading={loading}
       columns={columns}
       getRowId={(r) => r.id}
       onRowClick={(r) => onOpen(r.id)}
@@ -696,13 +779,13 @@ function EmailPreviewDialog({ id, onClose }: { id: string | null; onClose: () =>
           </p>
         )}
         {isPending ? (
-          <TableSkeleton rows={4} cols={1} />
+          <Skeleton className="h-[600px] w-full" />
         ) : email ? (
           <iframe
             title="Sent email"
             srcDoc={email.html}
             sandbox=""
-            className="h-[600px] w-full rounded-lg border bg-white"
+            className="h-[600px] w-full rounded-none border-0 bg-transparent [color-scheme:dark]"
           />
         ) : (
           <EmptyState title="Not found" message="This email is no longer in the log." />

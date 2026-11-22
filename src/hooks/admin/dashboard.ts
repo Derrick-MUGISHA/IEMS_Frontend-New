@@ -6,10 +6,10 @@ import { dashboardService, notificationsService } from "@/services/admin";
 import { adminKeys } from "./keys";
 import { errorMessage } from "./util";
 
-export function useDashboard() {
+export function useDashboard(eventId?: string) {
   return useQuery({
-    queryKey: adminKeys.dashboard,
-    queryFn: () => dashboardService.stats(),
+    queryKey: [...adminKeys.dashboard, eventId ?? "all"],
+    queryFn: () => dashboardService.stats(eventId),
     staleTime: 15_000,
     refetchInterval: 60_000,
   });
@@ -29,6 +29,7 @@ export function useNotifications() {
     queryKey: adminKeys.notifications,
     queryFn: () => notificationsService.list(),
     staleTime: 10_000,
+    refetchInterval: 60_000,
   });
 }
 

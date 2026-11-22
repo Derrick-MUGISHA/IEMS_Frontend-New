@@ -6,7 +6,6 @@ import {
   Participant,
   ScanLog,
   Ticket,
-  VerificationToken,
   eventDeadline,
   type TicketDoc,
 } from "@/models";
@@ -34,13 +33,6 @@ async function loadHolder(ticket: TicketDoc) {
             label: p.stack ?? null,
             photoUrl: p.profilePicture ?? null,
           },
-          remove: async () => {
-            await Promise.all([
-              Participant.deleteOne({ _id: p._id }),
-              Guest.deleteMany({ inviter: p._id }),
-              VerificationToken.deleteMany({ participant: p._id }),
-            ]);
-          },
           badge: p.stack ?? null,
         }
       : null;
@@ -55,9 +47,6 @@ async function loadHolder(ticket: TicketDoc) {
           phone: null,
           label: g.guestType,
           photoUrl: g.profile ?? null,
-        },
-        remove: async () => {
-          await Guest.deleteOne({ _id: g._id });
         },
         badge: g.guestType,
       }
@@ -96,14 +85,15 @@ export async function POST(req: Request) {
   }
 
   const known = await Ticket.findOne({ code: qr.code });
-  const holder = known ? await loadHolder(known) : null;
-  const event = known ? await Event.findById(known.event) : null;
+  const [holder, event] = known
+    ? await Promise.all([loadHolder(known), Event.findById(known.event)])
+    : [null, null];
   const who = holder
     ? holder.who
     : known?.holder
       ? {
           fullName: known.holder.name,
-          type: known.holder.label ?? "GUEST",
+          type: known.holderType === "Participant" ? "PARTICIPANT" : known.holder.label ?? "GUEST",
           photoUrl: known.holder.photoUrl ?? null,
         }
       : qr.name
@@ -114,8 +104,8 @@ export async function POST(req: Request) {
   const expiresAt = deadline?.toISOString() ?? null;
 
   /* a signed code we've never issued, or a revoked pass */
-  if (!known || known.status === "REVOKED") {
-    const result = !known ? "INVALID" : "REVOKED";
+  if (!known || !event || known.status === "REVOKED") {
+    const result = !known || !event ? "INVALID" : "REVOKED";
     await ScanLog.create({ ...scannedBy, ticket: known?._id ?? null, result });
     void notifyAdmins({
       kind: "SCAN_ALERT",
@@ -162,26 +152,23 @@ export async function POST(req: Request) {
   /* atomic claim: two gates scanning the same ticket can't both accept it */
   const ticket = await Ticket.findOneAndUpdate(
     { code: qr.code, status: "VALID" },
-    { status: "USED", scannedAt: now },
+    { $set: { status: "USED", scannedAt: now, ...(holder ? { holder: holder.snapshot } : {}) } },
     { new: true }
   );
   if (!ticket) {
-    /* lost the race to another gate a moment ago */
-    await ScanLog.create({ ...scannedBy, ticket: known._id, result: "ALREADY_USED" });
-    return ok(
-      broadcast({ at, result: "ALREADY_USED", attendee: who, eventName, usedAt: at, expiresAt })
-    );
+    // A revoke, QR rotation or another check-in may have won the race.
+    const current = await Ticket.findById(known._id);
+    const result = current?.status === "USED" ? "ALREADY_USED"
+      : current?.status === "REVOKED" ? "REVOKED" : "INVALID";
+    await ScanLog.create({ ...scannedBy, ticket: known._id, result });
+    return ok(broadcast({ at, result, attendee: who, eventName,
+      usedAt: current?.scannedAt?.toISOString() ?? null, expiresAt }));
   }
 
   await ScanLog.create({ ...scannedBy, ticket: ticket._id, result: "ACCEPTED" });
 
-  /* the pass is consumed — archive the holder on the ticket, then delete the
-     holder record so the same person is free to register for any other event */
-  if (holder) {
-    ticket.holder = holder.snapshot;
-    await ticket.save();
-    await holder.remove();
-  }
+  // Keep registrations and plus-one relationships for attendance reporting.
+  // The holder snapshot was persisted atomically with the check-in above.
 
   void notifyAdmins({
     kind: "CHECK_IN",

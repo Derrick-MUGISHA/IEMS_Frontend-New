@@ -33,6 +33,7 @@ export interface TicketDoc {
   holder?: TicketHolder | null;
   status: TicketStatus;
   issuedAt: Date;
+  qrIssuedAt?: Date | null;
   /** when the ticket email was last successfully sent */
   sentAt?: Date | null;
   /** how many times the ticket has been reset (code rotated) */
@@ -70,6 +71,7 @@ const TicketSchema = new Schema<TicketDoc>(
     },
     status: { type: String, enum: TICKET_STATUSES, default: "VALID" },
     issuedAt: { type: Date, default: () => new Date() },
+    qrIssuedAt: { type: Date, default: null },
     sentAt: { type: Date, default: null },
     resetCount: { type: Number, default: 0 },
     scannedAt: { type: Date, default: null },

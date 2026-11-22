@@ -50,7 +50,7 @@ export default function RootLayout({
       /* browser extensions stamp attributes onto <html> before React
          hydrates (e.g. __gcrremoteframetoken) — not ours, don't warn */
       suppressHydrationWarning
-      className={cn("h-full antialiased font-sans", marker.variable, barlow.variable, instrument.variable)}
+      className={cn("dark h-full antialiased font-sans", marker.variable, barlow.variable, instrument.variable)}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
