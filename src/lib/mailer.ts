@@ -213,6 +213,71 @@ export function renderPlusOneRevokedEmail(p: { name: string; eventName: string }
   };
 }
 
+/* The daily status-aware nudge. `step` selects which unfinished part of the
+   flow the participant is stuck on, so the email always says where they are and
+   exactly what to do next. All steps share one single-use sign-in link:
+   PENDING verifies the email, VERIFIED/COMPLETE land on the dashboard. */
+export type ProgressStep = "VERIFY" | "FINISH" | "PLUS_ONE";
+
+export function renderProgressReminderEmail(p: {
+  name: string;
+  eventName: string;
+  step: ProgressStep;
+  url: string;
+  whenLabel?: string;
+}): RenderedEmail {
+  const first = p.name.split(" ")[0];
+  const when = p.whenLabel ? ` ${p.whenLabel}` : "";
+  if (p.step === "VERIFY") {
+    return {
+      subject: `Finish signing up for ${p.eventName}`,
+      html: shell(`
+        <p>Hi ${first},</p>
+        <p>You're registered for <b>${p.eventName}</b>${when}, but your email address isn't verified yet — so we can't issue your event pass.</p>
+        <p><b>Where you are:</b> step 1 of 2, confirm your email. <b>What's next:</b> click below to verify, then add a photo and your pass is on its way.</p>
+        ${button(p.url, "Verify my email & continue")}
+        <p style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours.</p>
+      `),
+    };
+  }
+  if (p.step === "FINISH") {
+    return {
+      subject: `One step left for your ${p.eventName} pass`,
+      html: shell(`
+        <p>Hi ${first},</p>
+        <p>Your email is verified for <b>${p.eventName}</b>${when} — you're almost there. We just need a profile photo before your event pass can be issued.</p>
+        <p><b>Where you are:</b> step 2 of 2, complete your profile. <b>What's next:</b> sign in below, add your photo, and your pass is emailed to you right away.</p>
+        ${button(p.url, "Finish & get my pass")}
+        <p style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours.</p>
+      `),
+    };
+  }
+  /* PLUS_ONE — fully registered, but hasn't invited their one allowed guest */
+  return {
+    subject: `Bring a guest to ${p.eventName}`,
+    html: shell(`
+      <p>Hi ${first},</p>
+      <p>You're all set for <b>${p.eventName}</b>${when} and your pass has been issued. A quick reminder: you can bring <b>one guest</b>, and you haven't invited a plus-one yet.</p>
+      <p><b>What's next:</b> sign in to your dashboard below to add your plus-one's details, or send them their own invite link. Their guest pass is issued the moment they're added.</p>
+      ${button(p.url, "Invite my plus-one")}
+      <p style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours. If you'd rather come on your own, you can ignore this — no action needed.</p>
+    `),
+  };
+}
+
+/* Sent to a plus-one when an admin removes them from an event: their guest pass
+   no longer works. */
+export function renderPlusOneRevokedEmail(p: { name: string; eventName: string }): RenderedEmail {
+  return {
+    subject: `Update on your guest pass for ${p.eventName}`,
+    html: shell(`
+      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>We're letting you know that your guest pass for <b>${p.eventName}</b> has been withdrawn. It can no longer be used to enter the event, and any QR code you were sent is now inactive.</p>
+      <p>If you think this was a mistake, please reply to this email or reach out to the person who originally invited you.</p>
+    `),
+  };
+}
+
 export function renderEventReminderEmail(p: {
   name: string;
   eventName: string;
