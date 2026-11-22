@@ -20,6 +20,7 @@ const MONO = "TicketMono";
 export type TicketPdfInput = {
   name: string;
   role?: string;
+  /** holder type (PARTICIPANT / GUEST / PLUS_ONE) */
   type: string;
   eventName: string;
   eventDate?: Date | null;
