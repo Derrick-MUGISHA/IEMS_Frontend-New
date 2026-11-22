@@ -1,7 +1,7 @@
 import { dbConnect } from "@/lib/db";
 import { Participant } from "@/models";
 import { requireAttendee } from "@/lib/auth";
-import { uploadImage, InvalidImageError } from "@/lib/cloudinary";
+import { uploadImage, InvalidImageError, ImageUploadError } from "@/lib/cloudinary";
 import { issueTicket, CapacityError } from "@/lib/tickets";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     participant.profilePicture = await uploadImage(buffer, "participants");
   } catch (err) {
     if (err instanceof InvalidImageError) return fail(err.message);
+    if (err instanceof ImageUploadError) return fail(err.message, err.status);
     throw err;
   }
   participant.status = "COMPLETE";

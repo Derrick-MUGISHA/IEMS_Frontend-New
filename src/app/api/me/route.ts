@@ -2,8 +2,8 @@ import { z } from "zod";
 import { dbConnect } from "@/lib/db";
 import { Event, Guest, Participant, Ticket, GENDERS, STACKS } from "@/models";
 import { requireAttendee } from "@/lib/auth";
-import { ticketQrDataUrl } from "@/lib/qr";
 import { roleLine } from "@/lib/tickets";
+import { ticketPreview } from "@/lib/ticketPreview";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
 export async function GET(req: Request) {
@@ -69,13 +69,11 @@ export async function GET(req: Request) {
       rules: event.rules,
     },
     ticket: ticket && {
+      id: ticket._id,
+      ticketNumber: ticket.ticketNumber,
       code: ticket.code,
       status: ticket.status,
-      qrDataUrl: await ticketQrDataUrl(ticket.code, {
-        name: participant.name,
-        type: "PARTICIPANT",
-        eventName: event?.name,
-      }),
+      preview: await ticketPreview(ticket, { event, holder: { name: participant.name, type: "PARTICIPANT" } }),
     },
     plusOne: plusOneView,
   });

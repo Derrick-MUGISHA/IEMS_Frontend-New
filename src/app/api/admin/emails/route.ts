@@ -56,7 +56,7 @@ export async function GET(req: Request) {
           ? Participant.countDocuments({ event: { $in: upcoming.map((e) => e._id) } })
           : 0
     ),
-    Event.find().select("name slug startTime").sort({ startTime: -1 }),
+    Event.find().select("name slug startTime gallery location").sort({ startTime: -1 }),
   ]);
 
   /* sent/failed counts per template kind */
@@ -71,10 +71,13 @@ export async function GET(req: Request) {
   /* funnel: PENDING = clicked apply but never verified their email;
      VERIFIED = verified but never finished the profile (no ticket yet);
      COMPLETE = finished, pass issued. */
-  const eventName = new Map(events.map((e) => [e._id.toString(), e.name]));
+  const eventById = new Map(events.map((e) => [e._id.toString(), e]));
   const funnelRows: {
     eventId: string;
     eventName: string;
+    gallery: string[];
+    startTime?: Date;
+    location?: string;
     started: number;
     neverVerified: number;
     verifiedNotCompleted: number;
@@ -87,7 +90,10 @@ export async function GET(req: Request) {
     if (!r) {
       r = {
         eventId: id,
-        eventName: eventName.get(id) ?? "Deleted event",
+        eventName: eventById.get(id)?.name ?? "Deleted event",
+        gallery: eventById.get(id)?.gallery ?? [],
+        startTime: eventById.get(id)?.startTime,
+        location: eventById.get(id)?.location,
         started: 0,
         neverVerified: 0,
         verifiedNotCompleted: 0,

@@ -1,11 +1,15 @@
 "use client";
 
+import { Button as SdkButton } from "@ui-sdk/react/button";
+import { Calendar, CalendarDay, CalendarGrid, CalendarHeading, CalendarNext, CalendarPrevious, CalendarWeekday, CalendarWeekdays, CalendarWeeks } from "@ui-sdk/react/calendar";
+
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
-import { CalendarDays, MapPin, Tag } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Tag } from "lucide-react";
 import HeroCanvas from "./HeroCanvas";
+import { ErrorState } from "./admin/states";
 import {
   CATEGORIES,
   CATEGORY_COLORS,
@@ -24,7 +28,7 @@ function FeaturedSkeleton() {
     <div
       role="status"
       aria-label="Loading the next event"
-      className="hero-card w-full max-w-sm animate-pulse overflow-hidden rounded-3xl border border-line bg-panel"
+      className="hero-card w-full max-w-md animate-pulse overflow-hidden rounded-3xl border border-line bg-panel"
     >
       <div className="aspect-4/5 bg-panel-2" />
       <div className="space-y-3 p-5">
@@ -38,6 +42,27 @@ function FeaturedSkeleton() {
       <span className="sr-only">Loading the next event…</span>
     </div>
   );
+}
+
+export function EmptyHeroCalendar() {
+  return <div className="hero-card w-full max-w-lg rounded-3xl border border-line bg-panel p-5 shadow-lg shadow-green/10 sm:p-7">
+    <p className="label mb-2 text-xs font-semibold text-orange">Plan your next visit</p>
+    <Calendar readOnly weekStartsOn={1} locale="en-GB" timeZone="Africa/Kigali" className="w-full">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <CalendarHeading className="display text-2xl text-cream" />
+        <div className="flex gap-2">
+          <CalendarPrevious className="flex size-10 items-center justify-center border border-line bg-panel-2 text-cream hover:border-orange"><ChevronLeft className="size-5" /></CalendarPrevious>
+          <CalendarNext className="flex size-10 items-center justify-center border border-line bg-panel-2 text-cream hover:border-orange"><ChevronRight className="size-5" /></CalendarNext>
+        </div>
+      </div>
+      <CalendarGrid className="w-full table-fixed border-collapse">
+        <CalendarWeekdays>{(index) => <CalendarWeekday index={index} className="pb-3 text-xs font-semibold text-cream-dim" />}</CalendarWeekdays>
+        <CalendarWeeks>{(cell) => <CalendarDay value={cell.date} className="h-12 text-center text-sm font-medium text-cream outline-offset-[-3px] data-today:rounded-lg data-today:bg-orange data-today:font-bold data-today:text-bg data-outside:text-cream-dim/40 focus-visible:outline-2 focus-visible:outline-orange sm:h-14 sm:text-base" />}</CalendarWeeks>
+      </CalendarGrid>
+    </Calendar>
+    <p className="mt-5 border-t border-line pt-4 text-sm text-cream-dim">No upcoming events yet. New dates will appear here.</p>
+    <a href="#calendar" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-orange"><CalendarDays className="size-4" aria-hidden="true" />View full calendar</a>
+  </div>;
 }
 
 /* live Days : Hrs : Min chip, pinned to the poster — ticks on its own and
@@ -56,7 +81,7 @@ function CountdownChip({ event }: { event: VenueEvent }) {
 
   if (now > end) {
     return (
-      <span className="label rounded-xl bg-black/60 px-3 py-2 text-[10px] font-bold text-cream-dim backdrop-blur-sm">
+      <span className="label rounded-xl bg-panel/95 px-3 py-2 text-[10px] font-bold text-cream-dim backdrop-blur-sm">
         Ended
       </span>
     );
@@ -84,7 +109,7 @@ function CountdownChip({ event }: { event: VenueEvent }) {
     </span>
   );
   return (
-    <span className="flex items-center gap-2 rounded-xl bg-black/60 px-3.5 py-2 backdrop-blur-sm">
+    <span className="flex items-center gap-2 rounded-xl bg-panel/95 px-3.5 py-2 backdrop-blur-sm">
       {cell(days, "Days")}
       <span className="pb-2 text-cream-dim">:</span>
       {cell(hrs, "Hrs")}
@@ -105,18 +130,22 @@ function FeaturedEventCard({
 }) {
   const isToday = event.date === todayIso();
   return (
-    <button
+    <SdkButton
       type="button"
       onClick={onOpen}
-      className="hero-card group w-full max-w-sm cursor-pointer overflow-hidden rounded-3xl border border-line bg-panel text-left shadow-2xl shadow-black/40 transition-all hover:-translate-y-1 hover:border-orange"
+      className="public-action hero-card group block h-auto w-full max-w-md cursor-pointer overflow-hidden rounded-3xl border border-line bg-panel text-left shadow-lg shadow-green/10 transition-all hover:-translate-y-1 hover:border-orange"
     >
       <div className="relative aspect-4/5 w-full overflow-hidden bg-panel-2">
         {event.posterUrl ? (
-          <img
-            src={event.posterUrl}
-            alt={`${event.title} poster`}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          <>
+            <img src={event.posterUrl} alt="" aria-hidden="true" className="event-poster-reflection" />
+            <div className="event-poster-frost" aria-hidden="true" />
+            <img
+              src={event.posterUrl}
+              alt={`${event.title} poster`}
+              className="featured-event-image"
+            />
+          </>
         ) : (
           /* no poster yet — branded art card so the countdown still shines */
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-linear-to-br from-green-deep via-panel-2 to-bg p-6 text-center">
@@ -133,7 +162,7 @@ function FeaturedEventCard({
         </div>
         <div className="absolute right-3 top-3">
           {event.status === "OPEN" && !event.soldOut ? (
-            <span className="label flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[10px] font-bold text-green backdrop-blur-sm">
+            <span className="label flex items-center gap-1.5 rounded-full bg-panel/95 px-3 py-1.5 text-[10px] font-bold text-green backdrop-blur-sm">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute h-full w-full animate-ping rounded-full bg-green opacity-60" />
                 <span className="h-1.5 w-1.5 rounded-full bg-green" />
@@ -141,7 +170,7 @@ function FeaturedEventCard({
               Open
             </span>
           ) : (
-            <span className="label rounded-full bg-black/60 px-3 py-1.5 text-[10px] font-bold text-terracotta backdrop-blur-sm">
+            <span className="label rounded-full bg-panel/95 px-3 py-1.5 text-[10px] font-bold text-terracotta backdrop-blur-sm">
               {event.soldOut ? "Fully booked" : "Closed"}
             </span>
           )}
@@ -182,14 +211,14 @@ function FeaturedEventCard({
           </span>
         </div>
       </div>
-    </button>
+    </SdkButton>
   );
 }
 
 export default function Hero() {
   const rootRef = useRef<HTMLElement>(null);
 
-  const { data: events, isPending } = useEvents();
+  const { data: events, isPending, isError, refetch } = useEvents();
   const { openEvent } = useEventFlow();
 
   /* the featured card shows the next OPEN event; when nothing is open,
@@ -289,14 +318,7 @@ export default function Hero() {
           ) : upNext ? (
             <FeaturedEventCard event={upNext} onOpen={() => openEvent(upNext)} />
           ) : (
-            <a
-              href="#calendar"
-              className="hero-card mt-3 flex items-center gap-2.5 rounded-full border border-line bg-panel px-5 py-2.5 transition-colors hover:border-orange"
-            >
-              <span className="text-sm text-cream-dim">
-                Nothing coming up yet — see the full calendar
-              </span>
-            </a>
+            isError ? <div className="hero-card w-full max-w-sm"><ErrorState message="Events could not be loaded." onRetry={() => void refetch()} /></div> : <EmptyHeroCalendar />
           )}
         </div>
       </div>

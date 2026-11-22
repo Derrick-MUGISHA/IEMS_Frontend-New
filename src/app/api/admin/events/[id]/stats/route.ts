@@ -1,6 +1,6 @@
 import { isValidObjectId } from "mongoose";
 import { dbConnect } from "@/lib/db";
-import { Event, Participant, Guest, EmailLog, EMAIL_KINDS } from "@/models";
+import { Event, Participant, Guest, Ticket, EmailLog, EMAIL_KINDS } from "@/models";
 import { requireAdmin } from "@/lib/auth";
 import { ok, unauthorized, notFound } from "@/lib/http";
 
@@ -37,11 +37,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const hasPlusOne = inviterIds.length;
 
   /* emails that reached this event's people — participants + guests, by address */
-  const [participantEmails, guestEmails] = await Promise.all([
+  const [participantEmails, guestEmails, holderEmails] = await Promise.all([
     Participant.find({ event: event._id }).distinct("email"),
     Guest.find({ event: event._id }).distinct("email"),
+    Ticket.find({ event: event._id }).distinct("holder.email"),
   ]);
-  const emails = [...new Set([...participantEmails, ...guestEmails])];
+  const emails = [...new Set([...participantEmails, ...guestEmails, ...holderEmails].filter(Boolean))];
   const byKindAgg = emails.length
     ? await EmailLog.aggregate([
         { $match: { to: { $in: emails } } },

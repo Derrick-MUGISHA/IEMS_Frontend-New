@@ -44,5 +44,11 @@ next-env.d.ts
 CLAUDE.md
 
 # Agents.md 
+AGENTS.md
+package-lock.json
 
-AGENTS.mdpackage-lock.json
+# Generated ticket samples and PDF visual checks
+/output/pdf/
+/tmp/pdfs/
+.agents/
+AGENTS.md

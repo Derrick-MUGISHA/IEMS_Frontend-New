@@ -48,7 +48,7 @@ export function RichText({
   }
   return (
     <div
-      className={`[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:underline ${className}`}
+      className={`[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-orange ${className}`}
       dangerouslySetInnerHTML={{ __html: sanitize(html) }}
     />
   );

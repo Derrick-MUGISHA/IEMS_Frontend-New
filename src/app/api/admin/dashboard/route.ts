@@ -1,7 +1,8 @@
+import { isValidObjectId } from "mongoose";
 import { dbConnect } from "@/lib/db";
 import { Event, Guest, Participant, ScanLog, Ticket, eventDeadline } from "@/models";
 import { requireAdmin } from "@/lib/auth";
-import { ok, unauthorized } from "@/lib/http";
+import { ok, fail, unauthorized } from "@/lib/http";
 
 /* Admin dashboard: global counts + attendance analytics (§6). The payload is
    the same for every admin and each load fires ~11 DB ops (2 aggregations +
@@ -9,20 +10,23 @@ import { ok, unauthorized } from "@/lib/http";
    SSE, so a few seconds of staleness on the summary numbers is invisible.
    Per-instance, like the app's other in-process caches. */
 const CACHE_TTL_MS = 15_000;
-let cache: { at: number; payload: unknown } | null = null;
+const cache = new Map<string, { at: number; payload: unknown }>();
 
 export async function GET(req: Request) {
   const admin = await requireAdmin(req);
   if (!admin) return unauthorized();
 
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return ok(cache.payload);
-  }
-
+  const eventId = new URL(req.url).searchParams.get("event");
+  if (eventId && !isValidObjectId(eventId)) return fail("Choose a valid event");
+  const key = eventId ?? "all";
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return ok(cached.payload);
   await dbConnect();
+  const scope = eventId ? { event: eventId } : {};
+  const scopeTickets = eventId ? await Ticket.find(scope).select("_id") : [];
+  const scanScope = eventId ? { ticket: { $in: scopeTickets.map((ticket) => ticket._id) } } : {};
   const now = new Date();
   const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     events,
@@ -35,21 +39,21 @@ export async function GET(req: Request) {
     hourly,
     daily,
   ] = await Promise.all([
-    Event.find().select("startTime endTime archivedAt registeredCount"),
-    Participant.countDocuments(),
-    Guest.countDocuments(),
-    Ticket.countDocuments(),
-    Ticket.countDocuments({ sentAt: { $ne: null } }),
-    Ticket.countDocuments({ status: "USED" }),
-    ScanLog.countDocuments({ result: "ACCEPTED" }),
+    Event.find(eventId ? { _id: eventId } : {}).select("startTime endTime archivedAt registeredCount"),
+    Participant.countDocuments(scope),
+    Guest.countDocuments(scope),
+    Ticket.countDocuments(scope),
+    Ticket.countDocuments({ ...scope, sentAt: { $ne: null } }),
+    Ticket.countDocuments({ ...scope, status: "USED" }),
+    ScanLog.countDocuments({ ...scanScope, result: "ACCEPTED" }),
     ScanLog.aggregate<{ _id: string; n: number }>([
-      { $match: { result: "ACCEPTED", createdAt: { $gte: since24h } } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%dT%H:00", date: "$createdAt" } }, n: { $sum: 1 } } },
+      { $match: { ...scanScope, result: "ACCEPTED", createdAt: { $gte: since24h } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%dT%H:00", date: "$createdAt", timezone: "Africa/Kigali" } }, n: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]),
     ScanLog.aggregate<{ _id: string; n: number }>([
-      { $match: { result: "ACCEPTED", createdAt: { $gte: since30d } } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, n: { $sum: 1 } } },
+      { $match: { ...scanScope, result: "ACCEPTED" } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Africa/Kigali" } }, n: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]),
   ]);
@@ -106,6 +110,7 @@ export async function GET(req: Request) {
       dailyCheckins: daily.map((d) => ({ day: d._id, count: d.n })),
     },
   };
-  cache = { at: Date.now(), payload };
+  if (cache.size >= 50) cache.delete(cache.keys().next().value!);
+  cache.set(key, { at: Date.now(), payload });
   return ok(payload);
 }

@@ -1,16 +1,15 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-import { use, useRef } from "react";
+import { AdminDetailSkeleton } from "@/components/admin/PageSkeletons";
+
+import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RichText } from "@/components/RichText";
 import {
   CalendarDays,
   Clock,
-  ImagePlus,
   MapPin,
-  MoreHorizontal,
   Pencil,
   Send,
   Tag,
@@ -23,27 +22,22 @@ import {
   useEvent,
   useDeleteEvent,
   useUpdateEvent,
-  useUploadEventImage,
   useSendReminders,
   useEventEngagement,
 } from "@/hooks/admin/events";
 import { useEventStats } from "@/hooks/admin/dashboard";
 import type { EmailKind, EventEngagement } from "@/types/admin";
+import { EventImage } from "@/components/admin/EventImage";
+import { ActionMenu } from "@/components/admin/ActionMenu";
+import { TicketArtwork } from "@/components/admin/TicketArtwork";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { TableSkeleton, EmptyState } from "@/components/admin/states";
+import { EmptyState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 
 import { formatEventDateTime } from "@/lib/time";
 
@@ -66,11 +60,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const engagement = useEventEngagement(id);
   const del = useDeleteEvent();
   const update = useUpdateEvent();
-  const upload = useUploadEventImage();
   const reminders = useSendReminders();
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  if (isPending) return <TableSkeleton rows={5} cols={2} />;
+  if (isPending) return <AdminDetailSkeleton kind="event" />;
   if (!event)
     return (
       <EmptyState
@@ -93,64 +85,29 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       <PageHeader
         title={event.name}
         crumbs={[{ label: "Events", href: "/admin/events" }, { label: event.name }]}
-        actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href={`/admin/events/${id}/edit`}>
-                <Pencil className="size-4" />
-                Edit
-              </Link>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" aria-label="More actions">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem
-                  onClick={() =>
-                    update.mutate({ id, body: { isPublished: !event.isPublished } })
-                  }
-                >
-                  {event.isPublished ? "Unpublish" : "Publish"}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => update.mutate({ id, body: { archived: true } })}>
-                  Archive
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => reminders.mutate({ id })}
-                  disabled={reminders.isPending}
-                >
-                  <Send className="size-4" />
-                  Send reminders
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <ConfirmDialog
-                  trigger={
-                    <DropdownMenuItem
-                      onSelect={(e) => e.preventDefault()}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <Trash2 className="size-4" />
-                      Delete event
-                    </DropdownMenuItem>
-                  }
-                  title="Delete this event?"
-                  description="This permanently removes the event and all its participants, guests and tickets."
-                  confirmLabel="Delete event"
-                  destructive
-                  onConfirm={async () => {
-                    await del.mutateAsync(id);
-                    router.push("/admin/events");
-                  }}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        }
+        actions={<ActionMenu actions={[
+          { label: "Edit event", icon: <Pencil className="size-4" />, run: () => router.push(`/admin/events/${id}/edit`) },
+          { label: event.isPublished ? "Unpublish" : "Publish", icon: <CalendarDays className="size-4" />, run: () => update.mutateAsync({ id, body: { isPublished: !event.isPublished } }) },
+          { label: "Archive event", icon: <Clock className="size-4" />, run: () => update.mutateAsync({ id, body: { archived: true } }) },
+          { label: "Send reminders", icon: <Send className="size-4" />, disabled: reminders.isPending, run: () => reminders.mutateAsync({ id }) },
+          { label: "View participants", icon: <Users className="size-4" />, run: () => router.push(`/admin/attendees?event=${id}`) },
+          { label: "Delete event", icon: <Trash2 className="size-4" />, confirm: { title: "Delete this event?", description: "Permanently removes the event and its participants, guests and tickets.", destructive: true }, run: async () => { await del.mutateAsync(id); router.push("/admin/events"); } },
+        ]} />}
       />
 
+      <EventImage
+        thumbnail
+        images={event.gallery}
+        name={event.name}
+        className="mb-6 h-48 w-full rounded-xl sm:h-64 lg:h-80"
+      />
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card className="shadow-none">
+            <CardHeader>
+              <CardTitle className="text-base">Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <StatusBadge value={event.status} />
         <Badge variant="outline" className="rounded-full capitalize">
@@ -166,13 +123,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle className="text-base">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
+
               <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                 <Detail icon={CalendarDays} label="Starts" value={dt(event.startTime)} />
                 <Detail icon={Clock} label="Ends" value={event.endTime ? dt(event.endTime) : "—"} />
@@ -207,49 +158,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
           <EngagementCard data={engagement.data} loading={engagement.isPending} />
 
-          <Card className="shadow-none">
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-base">Gallery</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileRef.current?.click()}
-                disabled={upload.isPending}
-              >
-                <ImagePlus className="size-4" />
-                {upload.isPending ? "Uploading…" : "Add image"}
-              </Button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) upload.mutate({ id, file });
-                  e.target.value = "";
-                }}
-              />
-            </CardHeader>
-            <CardContent>
-              {event.gallery.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No images yet. Add one to feature this event.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {event.gallery.map((url) => (
-                    <img
-                      key={url}
-                      src={url}
-                      alt=""
-                      className="aspect-video w-full rounded-md border border-border object-cover"
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <Card className="shadow-none"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><TicketIcon className="size-4" />Ticket design</CardTitle></CardHeader><CardContent>
+            <TicketArtwork ticket={{ name: "Attendee name", eventName: event.name, date: event.startTime, venue: event.location, images: event.gallery, organiser: event.organiser, subtitle: event.details, price: event.price }} />
+          </CardContent></Card>
         </div>
 
         <div className="space-y-3">
@@ -309,18 +220,18 @@ function EngagementCard({ data, loading }: { data?: EventEngagement; loading: bo
 
   return (
     <Card className="shadow-none">
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-base">Engagement</CardTitle>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+        <CardTitle className="text-base">Registration follow-up</CardTitle>
         {data && (
           <Badge variant="outline" className="rounded-full">
-            {data.reminderPool.total} to nudge
+            {data.reminderPool.total} eligible for follow-up
           </Badge>
         )}
       </CardHeader>
       <CardContent className="space-y-5 text-sm">
         <div className="grid grid-cols-2 gap-3">
-          <MiniStat label="Applicants" value={data?.funnel.total} loading={loading} />
-          <MiniStat label="Plus-ones" value={data?.plusOne.has} loading={loading} />
+          <MiniStat label="Current participant records" value={data?.funnel.total} loading={loading} />
+          <MiniStat label="Participants with a plus-one" value={data?.plusOne.has} loading={loading} />
         </div>
 
         <div>
@@ -346,20 +257,20 @@ function EngagementCard({ data, loading }: { data?: EventEngagement; loading: bo
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Emails sent {data ? `(${data.emails.total})` : ""}
+            Retained email attempts {data ? `(${data.emails.total})` : ""}
           </p>
           {loading ? (
             <p className="text-muted-foreground">Loading…</p>
           ) : sentKinds.length === 0 ? (
-            <p className="text-muted-foreground">No emails have reached this event&apos;s people yet.</p>
+            <p className="text-muted-foreground">No retained email logs for these recipients. Older messages may have expired; ticket delivery counts above use the ticket records.</p>
           ) : (
             <div className="space-y-2">
               {sentKinds.map(([kind, v]) => (
                 <div key={kind} className="flex items-center justify-between gap-3">
                   <span className="font-medium">{EMAIL_KIND_LABEL[kind]}</span>
                   <span className="flex items-center gap-2 tabular-nums text-muted-foreground">
-                    <span className="text-green-700">{v.sent} sent</span>
-                    {v.failed > 0 && <span className="text-red-600">{v.failed} failed</span>}
+                    <span className="text-emerald-400">{v.sent} sent</span>
+                    {v.failed > 0 && <span className="text-red-400">{v.failed} failed</span>}
                   </span>
                 </div>
               ))}

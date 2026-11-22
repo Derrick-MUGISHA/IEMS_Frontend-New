@@ -23,13 +23,13 @@ export async function GET(req: Request) {
         participantFaces,
         guestFaces,
         holderFaces,
-        archivedCount,
+        archivedCounts,
       ] = await Promise.all([
         Participant.countDocuments({ event: event._id }),
         Guest.countDocuments({ event: event._id }),
         Participant.countDocuments({ event: event._id, registrationStatus: "APPROVED" }),
         Guest.countDocuments({ event: event._id, guestType: "PLUS_ONE" }),
-        Ticket.countDocuments({ event: event._id, sentAt: { $ne: null } }),
+        Ticket.countDocuments({ event: event._id, status: { $ne: "REVOKED" }, sentAt: { $ne: null } }),
         Participant.aggregate([
           { $match: { event: event._id } },
           { $group: { _id: { stack: "$stack", status: "$status" }, n: { $sum: 1 } } },
@@ -53,9 +53,18 @@ export async function GET(req: Request) {
           .sort({ scannedAt: -1 })
           .limit(5)
           .select("holder.name holder.photoUrl"),
-        Ticket.countDocuments({ event: event._id, "holder.name": { $exists: true } }),
+        Ticket.aggregate<{ n: number }>([
+          { $match: { event: event._id } },
+          { $group: { _id: { holderId: "$holderId", holderType: "$holderType" } } },
+          { $project: { holderId: "$_id.holderId", holderType: "$_id.holderType" } },
+          { $lookup: { from: "participants", localField: "holderId", foreignField: "_id", as: "liveParticipant" } },
+          { $lookup: { from: "guests", localField: "holderId", foreignField: "_id", as: "liveGuest" } },
+          { $match: { $expr: { $cond: [{ $eq: ["$holderType", "Participant"] }, { $eq: [{ $size: "$liveParticipant" }, 0] }, { $eq: [{ $size: "$liveGuest" }, 0] }] } } },
+          { $count: "n" },
+        ]),
       ]);
 
+      const archivedCount = archivedCounts[0]?.n ?? 0;
       const ticketCounts = Object.fromEntries(tickets.map((t) => [t._id, t.n]));
       const issued = (ticketCounts.VALID ?? 0) + (ticketCounts.USED ?? 0);
       const checkedIn = ticketCounts.USED ?? 0;

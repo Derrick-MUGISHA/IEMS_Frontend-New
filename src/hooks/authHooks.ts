@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/client";
 import {
   persistAdmin,
@@ -97,6 +97,7 @@ export function useParticipantMe(enabled: boolean) {
 
 export function useLogout(role: Role) {
   const dispatch = useAppDispatch();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       if (role === "participant") {
@@ -107,6 +108,10 @@ export function useLogout(role: Role) {
       if (role === "admin") clearAdmin();
       if (role === "scanner") clearScanner();
       dispatch(clearSession({ role }));
+      if (role === "participant") {
+        qc.removeQueries({ queryKey: ["participant"] });
+        qc.removeQueries({ queryKey: ["ticket-pdf", "participant"] });
+      }
     },
   });
 }

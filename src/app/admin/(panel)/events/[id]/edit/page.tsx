@@ -1,12 +1,13 @@
 "use client";
 
+import { AdminFormSkeleton } from "@/components/admin/PageSkeletons";
+
 import { use } from "react";
 import { useRouter } from "next/navigation";
 import { useEvent, useUpdateEvent } from "@/hooks/admin/events";
 import { EventForm } from "@/components/admin/EventForm";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { TableSkeleton, EmptyState } from "@/components/admin/states";
-import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/admin/states";
 import type { EventFormValues, EventUpdateBody, EventFormInput } from "@/schemas/admin";
 import { isoToKigaliInput, kigaliInputToISO } from "@/lib/time";
 
@@ -16,7 +17,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const { data: event, isPending } = useEvent(id);
   const update = useUpdateEvent();
 
-  if (isPending) return <TableSkeleton rows={4} cols={2} />;
+  if (isPending) return <AdminFormSkeleton kind="event" fields={4} />;
   if (!event)
     return (
       <EmptyState title="Event not found" message="It may have been deleted." />
@@ -64,7 +65,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="mx-auto">
+    <div className="w-full">
       <PageHeader
         title="Edit event"
         crumbs={[
@@ -73,8 +74,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
           { label: "Edit" },
         ]}
       />
-      <Card className="shadow-none">
-        <CardContent className="pt-6">
           <EventForm
             mode="edit"
             defaultValues={defaults}
@@ -82,8 +81,6 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
             onSubmit={onSubmit}
             onCancel={() => router.push(`/admin/events/${id}`)}
           />
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
   REGISTRATION_STATUSES,
 } from "@/models";
 import { requireAdmin } from "@/lib/auth";
-import { ticketQrDataUrl } from "@/lib/qr";
+import { canonicalTicketQrUrl } from "@/lib/qr";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
 /* Admin: full profile of a single participant — identity, ticket + QR, scan
@@ -58,7 +58,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       status: p.status,
       registrationStatus: p.registrationStatus,
       registeredAt: p.createdAt,
-      event: event ? { id: event._id, name: event.name, startTime: event.startTime } : null,
+      event: event ? { id: event._id, name: event.name, startTime: event.startTime, endTime: event.endTime, gallery: event.gallery, location: event.location, organiser: event.organiser, details: event.details, price: event.price } : null,
     },
     ticket: ticket
       ? {
@@ -67,11 +67,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
           status: ticket.status,
           sentAt: ticket.sentAt ?? null,
           scannedAt: ticket.scannedAt ?? null,
-          qrDataUrl: await ticketQrDataUrl(ticket.code, {
-            name: p.name,
-            type: "PARTICIPANT",
-            eventName: event?.name,
-          }),
+          qrDataUrl: await canonicalTicketQrUrl(ticket),
         }
       : null,
     attendance: {
@@ -100,11 +96,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 
 const PatchBody = z
   .object({
-    name: z.string().min(2),
-    email: z.string().email(),
-    phone: z.string().min(6),
-    stack: z.enum(STACKS),
-    gender: z.enum(GENDERS),
+    name: z.string().trim().min(2),
+    email: z.string().trim().email(),
+    phone: z.string().trim().min(6).or(z.literal("")),
+    stack: z.enum(STACKS).nullable(),
+    gender: z.enum(GENDERS).nullable(),
     registrationStatus: z.enum(REGISTRATION_STATUSES),
   })
   .partial();
@@ -128,8 +124,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (d.name !== undefined) p.name = d.name;
   if (d.email !== undefined) p.email = d.email.toLowerCase();
   if (d.phone !== undefined) p.phone = d.phone;
-  if (d.stack !== undefined) p.stack = d.stack;
-  if (d.gender !== undefined) p.gender = d.gender;
+  if (d.stack !== undefined) p.stack = d.stack ?? undefined;
+  if (d.gender !== undefined) p.gender = d.gender ?? undefined;
   if (d.registrationStatus !== undefined) p.registrationStatus = d.registrationStatus;
   try {
     await p.save();

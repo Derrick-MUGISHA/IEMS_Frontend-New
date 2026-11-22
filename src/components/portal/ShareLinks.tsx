@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as SdkButton } from "@ui-sdk/react/button";
+
 import { useEffect, useState } from "react";
 import { Mail, Share2 } from "lucide-react";
 
@@ -26,7 +28,7 @@ function BrandIcon({ path }: { path: string }) {
 }
 
 const PILL =
-  "flex size-10 items-center justify-center rounded-full border border-line bg-panel-2 text-cream-dim transition-colors hover:border-orange hover:text-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange";
+  "public-action flex size-10 items-center justify-center rounded-md border border-line bg-panel-2 text-cream-dim transition-colors hover:border-orange hover:text-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange";
 
 /* One row of share targets for a link: the device's native share sheet when
    available (covers Instagram, SMS, and everything else installed), plus
@@ -74,7 +76,7 @@ export default function ShareLinks({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {canNative && (
-        <button
+        <SdkButton
           type="button"
           className={PILL}
           aria-label="Share…"
@@ -86,7 +88,7 @@ export default function ShareLinks({
           }}
         >
           <Share2 className="size-4" />
-        </button>
+        </SdkButton>
       )}
       {targets.map((t) => (
         <a
