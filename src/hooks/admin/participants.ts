@@ -10,6 +10,21 @@ import type {
 } from "@/schemas/admin";
 import { adminKeys } from "./keys";
 import { errorMessage } from "./util";
+import { sendParticipantInvitations } from "@/lib/sendParticipantInvitations";
+
+export function useSendParticipantInvitations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: sendParticipantInvitations,
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["admin", "emails"] });
+      if (result.failed.length) {
+        toast.warning(`${result.sent.length} invitations sent · ${result.failed.length} failed`, { description: result.failed[0].error });
+      } else if (result.sent.length) toast.success(`${result.sent.length} invitation emails sent`);
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+}
 
 export function useParticipants(filters: ParticipantFilters = {}) {
   return useQuery({
@@ -31,9 +46,13 @@ export function useCreateParticipant() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ParticipantCreateValues) => participantsService.create(body),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: adminKeys.participantsAll });
-      toast.success("Participant registered");
+      if (result.invitationSent) {
+        toast.success("Participant registered — invitation email sent");
+      } else {
+        toast.warning("Participant registered, but the invitation failed. Use Send invitation in their Actions menu to retry.", { description: result.invitationError });
+      }
     },
     onError: (e) => toast.error(errorMessage(e)),
   });

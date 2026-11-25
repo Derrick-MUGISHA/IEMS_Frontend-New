@@ -1,28 +1,32 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { AdminDetailSkeleton } from "@/components/admin/PageSkeletons";
+
 import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Ban, QrCode, RotateCcw, Send, Trash2 } from "lucide-react";
+import { TicketPanel } from "@/components/admin/TicketPanel";
+import { ActionMenu } from "@/components/admin/ActionMenu";
+import { formatEventDateTime } from "@/lib/time";
 import { useTicket, useTicketAction, useRegenerateQr } from "@/hooks/admin/tickets";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ScanHistory } from "@/components/admin/ScanHistory";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { TableSkeleton, EmptyState } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, isPending, error } = useTicket(id);
+  const { data, isPending, error, refetch } = useTicket(id);
   const action = useTicketAction();
   const regenerate = useRegenerateQr();
 
-  if (isPending) return <TableSkeleton rows={4} cols={2} />;
-  if (error || !data)
+  if (isPending) return <AdminDetailSkeleton kind="ticket" />;
+  if (error) return <ErrorState message={error.message} onRetry={() => refetch()} />;
+  if (!data)
     return (
       <EmptyState
         title="Ticket not found"
@@ -41,67 +45,32 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       <PageHeader
         title={t.ticketNumber}
         crumbs={[{ label: "Tickets", href: "/admin/tickets" }, { label: t.ticketNumber }]}
-        actions={
-          <>
-            <Button variant="outline" onClick={() => action.mutate({ id, action: "resend" })}>
-              <Send className="size-4" />
-              Resend
-            </Button>
-            <Button variant="outline" onClick={() => regenerate.mutate(id)}>
-              <QrCode className="size-4" />
-              New QR
-            </Button>
-            <ConfirmDialog
-              trigger={
-                <Button variant="outline">
-                  <RotateCcw className="size-4" />
-                  Reset
-                </Button>
-              }
-              title="Reset this ticket?"
-              description="The old QR stops working and a new pass is emailed."
-              confirmLabel="Reset ticket"
-              onConfirm={async () => {
-                await action.mutateAsync({ id, action: "reset" });
-              }}
-            />
-            {t.status !== "REVOKED" && (
-              <ConfirmDialog
-                trigger={
-                  <Button variant="outline" className="text-red-600">
-                    <Ban className="size-4" />
-                    Revoke
-                  </Button>
-                }
-                title="Revoke this ticket?"
-                description="Invalidates the pass and frees its seat."
-                confirmLabel="Revoke"
-                destructive
-                onConfirm={async () => {
-                  await action.mutateAsync({ id, action: "revoke" });
-                }}
-              />
-            )}
-            <ConfirmDialog
-              trigger={
-                <Button variant="outline" size="icon" className="text-red-600" aria-label="Delete">
-                  <Trash2 className="size-4" />
-                </Button>
-              }
-              title="Delete this ticket?"
-              description="Permanently removes the record and frees its seat."
-              confirmLabel="Delete"
-              destructive
-              onConfirm={async () => {
-                await action.mutateAsync({ id, action: "delete" });
-                router.push("/admin/tickets");
-              }}
-            />
-          </>
-        }
+        actions={<ActionMenu actions={[
+          { label: "Resend ticket", icon: <Send className="size-4" />, run: () => action.mutateAsync({ id, action: "resend" }) },
+          { label: "Replace QR", icon: <QrCode className="size-4" />, disabled: t.status !== "VALID", confirm: { title: "Replace this QR?", description: "The old QR stops working. Download or resend the updated ticket." }, run: () => regenerate.mutateAsync(id) },
+          { label: "Reset ticket", icon: <RotateCcw className="size-4" />, disabled: t.status !== "VALID", confirm: { title: "Reset this ticket?", description: "The old QR stops working and a new ticket is emailed." }, run: () => action.mutateAsync({ id, action: "reset" }) },
+          { label: "Revoke ticket", icon: <Ban className="size-4" />, disabled: t.status === "REVOKED", confirm: { title: "Revoke this ticket?", description: "Invalidates the ticket and frees the seat.", destructive: true }, run: () => action.mutateAsync({ id, action: "revoke" }) },
+          { label: "Delete ticket", icon: <Trash2 className="size-4" />, confirm: { title: "Delete this ticket?", description: "Permanently removes the ticket record.", destructive: true }, run: async () => { await action.mutateAsync({ id, action: "delete" }); router.push("/admin/tickets"); } },
+        ]} />}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <section className="mb-6 space-y-4" aria-labelledby="ticket-preview-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="ticket-preview-title" className="text-lg font-semibold">Ticket</h2>
+            <p className="text-sm text-muted-foreground">
+              Review the PDF your attendee downloads and receives by email. Previewing does not check them in.
+            </p>
+          </div>
+        </div>
+        <TicketPanel ticket={{ ...t, sentAt: t.sentAt ?? null, qrDataUrl: t.qrDataUrl ?? "" }} name={t.participantName} type={t.holderType} event={{ name: t.eventName ?? "Event", startTime: t.eventDate ?? undefined, endTime: t.expiresAt ?? undefined, location: t.venue ?? undefined, gallery: t.gallery, organiser: t.organiser, details: t.subtitle, price: t.price }} />
+        <p className="text-sm text-muted-foreground">
+          {t.expiresAt ? `Entry closes ${formatEventDateTime(t.expiresAt)} (Kigali). ` : ""}
+          Share the ticket only with its holder.
+        </p>
+      </section>
+
+      <div className="space-y-6">
         <div className="space-y-6">
           <Card className="shadow-none">
             <CardHeader className="flex-row items-center justify-between">
@@ -129,23 +98,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
           <ScanHistory history={data.history} />
         </div>
 
-        <Card className="shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base">QR pass</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-3">
-            {t.qrDataUrl ? (
-              <img
-                src={t.qrDataUrl}
-                alt="Ticket QR"
-                className="size-48 rounded-lg border border-border bg-[#f7f3ea] p-2"
-              />
-            ) : (
-              <p className="py-6 text-sm text-muted-foreground">No QR available.</p>
-            )}
-            <p className="font-mono text-xs text-muted-foreground">{t.ticketNumber}</p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

@@ -22,7 +22,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         <SidebarProvider
           style={
             {
-              "--sidebar-width": "16rem",
+              "--sidebar-width": "17rem",
               "--header-height": "3.5rem",
             } as React.CSSProperties
           }
@@ -34,7 +34,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
           </SidebarInset>
         </SidebarProvider>
       </TooltipProvider>
-      <Toaster position="top-center" richColors closeButton />
+      <Toaster position="top-center" closeButton />
     </div>
   );
 }

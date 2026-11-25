@@ -24,7 +24,7 @@ export async function GET(req: Request) {
         send(`data: ${JSON.stringify({ scope })}\n\n`);
       });
       /* keep proxies (ngrok) from timing the stream out */
-      const heartbeat = setInterval(() => send(`: ping\n\n`), 25_000);
+      const heartbeat = setInterval(() => send(`event: heartbeat\ndata: {}\n\n`), 15_000);
       cleanup = () => {
         unsubscribe();
         clearInterval(heartbeat);
@@ -45,9 +45,11 @@ export async function GET(req: Request) {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Content-Encoding": "identity",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

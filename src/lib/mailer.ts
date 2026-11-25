@@ -3,6 +3,7 @@ import type Mail from "nodemailer/lib/mailer";
 import { dbConnect } from "./db";
 import { EmailLog, type EmailKind } from "@/models/EmailLog";
 import { formatEventDate, formatEventDateTime } from "./time";
+import { emailUnsubscribeAddress, renderEmailFooter } from "./emailFooter";
 
 /* Build the transporter lazily so the Gmail credentials are read at call time.
    The app injects env before modules run, but tsx (seed/health/tests) loads
@@ -33,7 +34,8 @@ function transport(): Transporter {
   return cached;
 }
 
-const FROM = () => `Igire Rwanda Organization Events <${process.env.GMAIL_USER}>`;
+const senderAddress = () => process.env.MAIL_FROM_ADDRESS || "no-reply@igirerwanda.org";
+export const emailSender = () => `Igire Rwanda Official Team <${senderAddress()}>`;
 
 /* liveness check for the health-check script — verifies the SMTP connection
    and credentials without sending a message. Throws on failure. */
@@ -47,30 +49,44 @@ export async function verifyMailer(): Promise<boolean> {
 
 export type RenderedEmail = { subject: string; html: string };
 
-/* Reads like a note a person wrote: white background, plain prose, one
-   button, a real sign-off — the branding stays out of the way */
-function shell(body: string): string {
-  return `
-  <div style="background:#ffffff;padding:28px 16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#242424;font-size:15px;line-height:1.65">
-    <div style="max-width:560px;margin:0 auto">
-      ${body}
-      <p style="margin:30px 0 4px">Warm regards,</p>
-      <p style="margin:0;font-weight:bold;color:#0b2818">The Igire Rwanda Events team</p>
-      <hr style="margin:26px 0 14px;border:none;border-top:1px solid #e8e8e6"/>
-      <p style="font-size:12px;color:#8b9089;margin:0">
-        Igire Rwanda Organization · Kigali, Rwanda<br/>
-        You are receiving this email because of your event registration with Igire Rwanda Organization.
-        If you weren't expecting it, you can safely ignore it.
-      </p>
-    </div>
-  </div>`;
+const escapeEmailText = (value: string) => value.replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+})[character]!);
+
+function shell(body: string, heading: string, programmeName: string): string {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="color-scheme" content="light dark"/><title>${escapeEmailText(heading)}</title>
+<style>
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #f4f4f5 !important; }
+    .email-note, [data-email-footer], [data-email-footer] p, [data-email-footer] a { color: #a1a1aa !important; }
+    [data-email-footer] td { color: #7cc35a !important; }
+    .email-update { background: #27272a !important; }
+  }
+</style></head>
+<body style="margin:0;padding:0;background:transparent;color:#000000;font-family:Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:0;margin:0">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif">
+        <tr><td style="color:inherit;text-align:center;padding:25px">
+          <h1 style="margin:0;font-size:24px;line-height:1.3">${escapeEmailText(heading)}</h1>
+          <p style="margin:5px 0 0;font-size:16px">${escapeEmailText(programmeName)}</p>
+        </td></tr>
+        <tr><td style="padding:25px;color:inherit;font-size:16px;line-height:1.6;overflow-wrap:break-word">
+          ${body}
+        </td></tr>
+        <tr><td style="padding:0 0 12px">${renderEmailFooter()}</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 }
 
 const button = (url: string, text: string) =>
-  `<p style="margin:26px 0">
-     <a href="${url}" style="background:#0b2818;color:#ffffff;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:8px;display:inline-block">${text}</a>
-   </p>
-   `
+  `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0"><tr><td bgcolor="#065f46" style="border-radius:8px;text-align:center">
+    <a href="${escapeEmailText(url)}" style="display:inline-block;padding:14px 24px;border:1px solid #065f46;border-radius:8px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none">${text}</a>
+  </td></tr></table>`;
 
 export function renderMagicLinkEmail(p: {
   name: string;
@@ -80,11 +96,11 @@ export function renderMagicLinkEmail(p: {
   return {
     subject: `Verify your email — ${p.eventName}`,
     html: shell(`
-      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
       <p>Thank you for registering for <b>${p.eventName}</b>. To continue, please verify your email address using the button below.</p>
       ${button(p.url, "Verify my email")}
-      <p style="font-size:13px;color:#555">For your security, this link can be used once and expires in 30 minutes.</p>
-    `),
+      <p class="email-note" style="font-size:13px;color:#555">For your security, this link can be used once and expires in 30 minutes.</p>
+    `, "Verify your email address", p.eventName),
   };
 }
 
@@ -99,7 +115,7 @@ export function renderPlusOneInviteEmail(p: {
       <p>Hello,</p>
       <p><b>${p.participantName}</b> would like to bring you as their guest to <b>${p.eventName}</b>. Registering only takes a minute — tell us a little about yourself and your event pass will be on its way.</p>
       ${button(p.url, "Join as their guest")}
-    `),
+    `, "You’re invited to join us", p.eventName),
   };
 }
 
@@ -110,10 +126,10 @@ export function renderRegistrationConfirmation(p: {
   return {
     subject: `You're registered for ${p.eventName}`,
     html: shell(`
-      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
       <p>Your registration for <b>${p.eventName}</b> is confirmed — welcome aboard!</p>
       <p>The next step is to complete your profile so we can issue your event pass. You will receive it by email as soon as it's ready.</p>
-    `),
+    `, "Your registration is confirmed", p.eventName),
   };
 }
 
@@ -125,10 +141,75 @@ export function renderEventUpdateEmail(p: {
   return {
     subject: `Update: ${p.eventName}`,
     html: shell(`
-      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
       <p>There's an update about <b>${p.eventName}</b>:</p>
-      <p style="padding:12px 16px;background:#f6f7f5;border-radius:8px">${p.message}</p>
-    `),
+      <p class="email-update" style="padding:12px 16px;background:#f6f7f5;border-radius:8px">${p.message}</p>
+    `, "An update about your event", p.eventName),
+  };
+}
+
+/* The daily status-aware nudge. `step` selects which unfinished part of the
+   flow the participant is stuck on, so the email always says where they are and
+   exactly what to do next. All steps share one single-use sign-in link:
+   PENDING verifies the email, VERIFIED/COMPLETE land on the dashboard. */
+export type ProgressStep = "VERIFY" | "FINISH" | "PLUS_ONE";
+
+export function renderProgressReminderEmail(p: {
+  name: string;
+  eventName: string;
+  step: ProgressStep;
+  url: string;
+  whenLabel?: string;
+}): RenderedEmail {
+  const first = escapeEmailText(p.name);
+  const when = p.whenLabel ? ` ${escapeEmailText(p.whenLabel)}` : "";
+  if (p.step === "VERIFY") {
+    return {
+      subject: `Finish signing up for ${p.eventName}`,
+      html: shell(`
+        <p>Dear <strong>${first}</strong>,</p>
+        <p>You're registered for <b>${p.eventName}</b>${when}, but your email address isn't verified yet — so we can't issue your event pass.</p>
+        <p><b>Where you are:</b> step 1 of 2, confirm your email. <b>What's next:</b> click below to verify, then add a photo and your pass is on its way.</p>
+        ${button(p.url, "Verify my email & continue")}
+        <p class="email-note" style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours.</p>
+      `, "Verify your email to continue", p.eventName),
+    };
+  }
+  if (p.step === "FINISH") {
+    return {
+      subject: `One step left for your ${p.eventName} pass`,
+      html: shell(`
+        <p>Dear <strong>${first}</strong>,</p>
+        <p>Your email is verified for <b>${p.eventName}</b>${when} — you're almost there. We just need a profile photo before your event pass can be issued.</p>
+        <p><b>Where you are:</b> step 2 of 2, complete your profile. <b>What's next:</b> sign in below, add your photo, and your pass is emailed to you right away.</p>
+        ${button(p.url, "Finish & get my pass")}
+        <p class="email-note" style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours.</p>
+      `, "Complete your profile", p.eventName),
+    };
+  }
+  /* PLUS_ONE — fully registered, but hasn't invited their one allowed guest */
+  return {
+    subject: `Bring a guest to ${p.eventName}`,
+    html: shell(`
+      <p>Dear <strong>${first}</strong>,</p>
+      <p>You're all set for <b>${p.eventName}</b>${when} and your pass has been issued. A quick reminder: you can bring <b>one guest</b>, and you haven't invited a plus-one yet.</p>
+      <p><b>What's next:</b> sign in to your dashboard below to add your plus-one's details, or send them their own invite link. Their guest pass is issued the moment they're added.</p>
+      ${button(p.url, "Invite my plus-one")}
+      <p class="email-note" style="font-size:13px;color:#555">This sign-in link is single-use and expires in 72 hours. If you'd rather come on your own, you can ignore this — no action needed.</p>
+    `, "Bring someone along", p.eventName),
+  };
+}
+
+/* Sent to a plus-one when an admin removes them from an event: their guest pass
+   no longer works. */
+export function renderPlusOneRevokedEmail(p: { name: string; eventName: string }): RenderedEmail {
+  return {
+    subject: `Update on your guest pass for ${p.eventName}`,
+    html: shell(`
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
+      <p>We're letting you know that your guest pass for <b>${p.eventName}</b> has been withdrawn. It can no longer be used to enter the event, and any QR code you were sent is now inactive.</p>
+      <p>If you think this was a mistake, please contact your event organiser or the person who originally invited you.</p>
+    `, "An update about your guest pass", p.eventName),
   };
 }
 
@@ -205,10 +286,10 @@ export function renderEventReminderEmail(p: {
   return {
     subject: `Reminder: ${p.eventName} is coming up`,
     html: shell(`
-      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
       <p>This is a friendly reminder that <b>${p.eventName}</b> is happening ${p.whenLabel}.</p>
       <p>Please bring your event pass — the QR code will be scanned at the entrance. We look forward to seeing you there!</p>
-    `),
+    `, "Your event is coming up", p.eventName),
   };
 }
 
@@ -216,25 +297,25 @@ export function renderEventReminderEmail(p: {
    the same words as a press badge. Falls back to the participant copy. */
 const PASS_INTROS: Record<string, (eventName: string) => string> = {
   VIP: (e) =>
-    `It is our pleasure to welcome you as a VIP guest at <b>${e}</b>. Your VIP pass is below — please present the QR code at the entrance for priority access.`,
+    `It is our pleasure to welcome you as a VIP guest at <b>${e}</b>. Your VIP ticket is attached — please present the QR code at the entrance for priority access.`,
   SPEAKER: (e) =>
-    `Thank you for joining <b>${e}</b> as a speaker — we're honoured to have you on stage. Your speaker pass is below; please present the QR code at the entrance.`,
+    `Thank you for joining <b>${e}</b> as a speaker — we're honoured to have you on stage. Your speaker ticket is attached; please present the QR code at the entrance.`,
   SPONSOR: (e) =>
-    `Thank you for supporting <b>${e}</b> as a sponsor. Your sponsor pass is below — please present the QR code at the entrance.`,
+    `Thank you for supporting <b>${e}</b> as a sponsor. Your sponsor ticket is attached — please present the QR code at the entrance.`,
   MEDIA: (e) =>
-    `Welcome to <b>${e}</b>. Your press pass is below — please present the QR code at the entrance.`,
+    `Welcome to <b>${e}</b>. Your press ticket is attached — please present the QR code at the entrance.`,
   PARTNER: (e) =>
-    `We're delighted to welcome you to <b>${e}</b> as our partner. Your partner pass is below — please present the QR code at the entrance.`,
+    `We're delighted to welcome you to <b>${e}</b> as our partner. Your partner ticket is attached — please present the QR code at the entrance.`,
   PLUS_ONE: (e) =>
-    `You're confirmed as a guest at <b>${e}</b>. Your guest pass is below — simply show the QR code at the entrance and you're in.`,
+    `You're confirmed as a guest at <b>${e}</b>. Your guest ticket is attached — simply show the QR code at the entrance and you're in.`,
   GENERAL: (e) =>
-    `You're confirmed for <b>${e}</b>. Your event pass is below — simply show the QR code at the entrance and you're in.`,
+    `You're confirmed for <b>${e}</b>. Your ticket is attached — simply show the QR code at the entrance and you're in.`,
 };
 
 function passIntro(type: string, eventName: string): string {
   const intro = PASS_INTROS[type];
   if (intro) return intro(eventName);
-  return `Great news — you're all set for <b>${eventName}</b>! Your personal event pass is below; simply show the QR code at the entrance and you're in.`;
+  return `Great news — you're all set for <b>${eventName}</b>! Your ticket is attached; simply show the QR code at the entrance and you're in.`;
 }
 
 /* Sent by an admin from the Emails page to people who started applying but
@@ -247,12 +328,12 @@ export function renderTicketNudgeEmail(p: {
   return {
     subject: `Your pass for ${p.eventName} is waiting`,
     html: shell(`
-      <p>Hi ${p.name.split(" ")[0]},</p>
+      <p>Dear <strong>${escapeEmailText(p.name)}</strong>,</p>
       <p>Your spot at <b>${p.eventName}</b> is reserved, but your registration isn't finished yet — and we can't issue your event pass until it is.</p>
       <p>It only takes a minute: sign in below, complete your profile, and your pass will be emailed to you right away.</p>
       ${button(p.url, "Finish my registration")}
-      <p style="font-size:13px;color:#555">For your security, this link can be used once and expires in 72 hours.</p>
-    `),
+      <p class="email-note" style="font-size:13px;color:#555">For your security, this link can be used once and expires in 72 hours.</p>
+    `, "Your event pass is waiting", p.eventName),
   };
 }
 
@@ -271,77 +352,28 @@ export type TicketEmailInput = {
   ticketUrl: string;
   /** the moment the pass stops working — when the event wraps up */
   validUntil?: Date | null;
-  qrPng: Buffer;
-  /** printable ticket document, attached as ticket.pdf */
-  pdf?: Buffer;
+  /** The single ticket artifact, attached as ticket.pdf. */
+  pdf: Buffer;
 };
 
-/* qrSrc: "cid:ticket-qr" when sending (inline attachment); a data URL when
-   rendering for the admin preview or the send log. */
+/** Email is a delivery note; the attached PDF is the only ticket. */
 export function renderTicketEmail(
-  opts: Omit<TicketEmailInput, "qrPng" | "pdf" | "to"> & { hasPdf?: boolean },
-  qrSrc = "cid:ticket-qr"
+  opts: Omit<TicketEmailInput, "pdf" | "to"> & { hasPdf?: boolean },
 ): RenderedEmail {
-  /* all times on the pass are event-local (Kigali) — the server TZ used to
-     leak in here and shift the printed hours */
-  const dateLabel = opts.eventDate
-    ? formatEventDate(opts.eventDate, {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "";
-  const typeLabel = opts.type === "PLUS_ONE" ? "GUEST · PLUS-ONE" : opts.type;
-  const photoCell = opts.photoUrl
-    ? `<img src="${opts.photoUrl}" alt="Your photo" width="84" height="84"
-         style="width:84px;height:84px;border-radius:12px;object-fit:cover;border:2px solid #f59300;display:block"/>`
-    : "";
-
-  /* the email mirrors the business-card ID shown on the dashboard */
+  const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]!);
+  const date = opts.eventDate ? formatEventDate(opts.eventDate) : "";
   return {
-    subject: `Your event pass ${opts.eventName}`,
+    subject: `Your ticket for ${opts.eventName}`,
     html: shell(`
-      <p>Hi ${opts.name.split(" ")[0]},</p>
-      <p>${passIntro(opts.type, opts.eventName)}</p>
-
-      <div style="margin:24px 0;border:1px solid #e8e8e6;border-radius:14px;overflow:hidden;background:#123522">
-        ${
-          opts.eventImage
-            ? `<img src="${opts.eventImage}" alt="" width="100%" style="display:block;width:100%;height:150px;object-fit:cover"/>`
-            : ""
-        }
-        <div style="background:#f59300;color:#0b2818;padding:10px 18px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">
-          Igire Rwanda Organization
-          <span style="float:right;background:rgba(18,21,13,0.2);border-radius:999px;padding:2px 10px">${typeLabel}</span>
-        </div>
-        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;padding:18px">
-          <tr>
-            ${photoCell ? `<td style="padding:18px 0 18px 18px;width:96px;vertical-align:top">${photoCell}</td>` : ""}
-            <td style="padding:18px;vertical-align:top">
-              <p style="margin:0;font-size:20px;font-weight:bold;color:#ffffff;text-transform:uppercase">${opts.name}</p>
-              ${opts.role ? `<p style="margin:2px 0 0;font-size:13px;font-weight:bold;color:#a9d4a0">${opts.role}</p>` : ""}
-              <p style="margin:10px 0 0;font-size:13px;color:#bfd4c5">${opts.eventName}</p>
-              <p style="margin:2px 0 0;font-size:12px;color:#bfd4c5">${dateLabel}${dateLabel && opts.venue ? " · " : ""}${opts.venue ?? ""}</p>
-            </td>
-          </tr>
-        </table>
-        <div style="text-align:center;padding:0 18px 18px">
-          <img src="${qrSrc}" alt="Ticket QR code" width="240" height="240" style="display:block;margin:0 auto"/>
-          <p style="margin:10px 0 0;font-size:12px;letter-spacing:2px;color:#bfd4c5">PASS ${opts.ticketCode}</p>
-        </div>
-        <div style="background:#1b4630;padding:10px 18px;text-align:center;font-size:11px;color:#bfd4c5">
-          This pass is personal and its QR code can only be scanned once.${
-            opts.validUntil
-              ? `<br/>Valid until ${formatEventDateTime(opts.validUntil)} — it expires when the event ends.`
-              : ""
-          }
-        </div>
-      </div>
-
-      ${button(opts.ticketUrl, "View my pass online")}
-      ${opts.hasPdf ? `<p style="font-size:13px;color:#555">We also attached a printable copy of your ticket as a PDF — handy if your phone battery has other plans.</p>` : ""}
-    `),
+      <p>Dear <strong>${escape(opts.name)}</strong>,</p>
+      <p>${passIntro(opts.type, escape(opts.eventName))}</p>
+      <p>${[date, opts.venue].filter(Boolean).map((value) => escape(value!)).join(" · ")}</p>
+      <p>Your ticket is the PDF attached to this email. <b>Scroll to the bottom of this email to find the attached ticket.pdf file.</b> Save it to your phone or print it, and show its QR code at the entrance. Each ticket admits one person.</p>
+      ${button(opts.ticketUrl, "Open my ticket")}
+      <p class="email-note" style="font-size:13px;color:#555">The link opens the same ticket. Keep it private.${opts.validUntil ? `<br/>Entry closes ${formatEventDateTime(opts.validUntil)} (Kigali).` : ""}</p>
+    `, "Your event ticket is ready", opts.eventName),
   };
 }
 
@@ -374,10 +406,7 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-/* Reminders/updates are the bulk, "could look like marketing" messages — giving
-   them a List-Unsubscribe header is what Gmail's bulk-sender guidelines ask for
-   and keeps them out of spam. Transactional mail (magic link, ticket) is left
-   alone: an unsubscribe link there would be nonsensical. */
+/* Reminders and updates also expose the shared footer's unsubscribe mailbox in headers. */
 const BULK_KINDS = new Set<EmailKind>(["REMINDER", "PROGRESS_REMINDER", "UPDATE"]);
 
 async function logEmail(
@@ -407,16 +436,13 @@ async function deliver(
   to: string,
   rendered: RenderedEmail,
   extra: Partial<Mail.Options> = {},
-  /** what to store in the log when it differs from what was transported
-      (the ticket email swaps its cid: QR for an inline data URL) */
+  /** Optional logged rendering when it differs from the transported HTML. */
   logged: RenderedEmail = rendered
 ) {
   try {
     await transport().sendMail({
-      from: FROM(),
-      /* replies reach a real inbox — mail with a valid, aligned Reply-To is
-         trusted more than a no-reply sender */
-      replyTo: process.env.GMAIL_USER,
+      from: emailSender(),
+      replyTo: process.env.MAIL_REPLY_TO || senderAddress(),
       to,
       subject: rendered.subject,
       html: rendered.html,
@@ -426,7 +452,7 @@ async function deliver(
         ? {
             list: {
               unsubscribe: {
-                url: `mailto:${process.env.GMAIL_USER}?subject=Unsubscribe`,
+                url: `mailto:${emailUnsubscribeAddress()}?subject=Unsubscribe`,
                 comment: "Unsubscribe from Igire Rwanda event emails",
               },
             },
@@ -435,12 +461,11 @@ async function deliver(
       ...extra,
     });
   } catch (err) {
-    /* log writes are off the critical path — the send result never waits on
-       the database */
-    void logEmail(kind, to, logged, "FAILED", err);
+    // Finish the best-effort log before a serverless request can stop execution.
+    await logEmail(kind, to, logged, "FAILED", err);
     throw err;
   }
-  void logEmail(kind, to, logged, "SENT");
+  await logEmail(kind, to, logged, "SENT");
 }
 
 export async function sendMagicLinkEmail(to: string, name: string, url: string, eventName: string) {
@@ -502,20 +527,9 @@ export async function sendPlusOneRevokedEmail(to: string, name: string, eventNam
 }
 
 export async function sendTicketEmail(opts: TicketEmailInput) {
-  const { to, qrPng, pdf, ...view } = opts;
-  const rendered = renderTicketEmail({ ...view, hasPdf: Boolean(pdf) });
-  /* the logged copy embeds the QR inline so the admin preview shows the
-     real pass, not a broken cid: reference */
-  const logged = renderTicketEmail(
-    { ...view, hasPdf: Boolean(pdf) },
-    `data:image/png;base64,${qrPng.toString("base64")}`
-  );
+  const { to, pdf, ...view } = opts;
+  const rendered = renderTicketEmail({ ...view, hasPdf: true });
   await deliver("TICKET", to, rendered, {
-    attachments: [
-      { filename: "ticket-qr.png", content: qrPng, cid: "ticket-qr" },
-      ...(pdf
-        ? [{ filename: "ticket.pdf", content: pdf, contentType: "application/pdf" }]
-        : []),
-    ],
-  }, logged);
+    attachments: [{ filename: "ticket.pdf", content: pdf, contentType: "application/pdf" }],
+  });
 }

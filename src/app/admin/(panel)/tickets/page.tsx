@@ -1,25 +1,21 @@
 "use client";
 
+import { AdminListSkeleton } from "@/components/admin/PageSkeletons";
+
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, MoreHorizontal, RotateCcw, Send, Ticket as TicketIcon, Trash2, Ban } from "lucide-react";
+import { Eye, RotateCcw, Send, Ticket as TicketIcon, Trash2, Ban } from "lucide-react";
 import { useTickets, useTicketAction } from "@/hooks/admin/tickets";
 import { TICKET_STATUSES, type AdminTicket } from "@/types/admin";
+import { ActionMenu } from "@/components/admin/ActionMenu";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { EventPicker } from "@/components/admin/EventPicker";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   Select,
   SelectContent,
@@ -80,82 +76,15 @@ function TicketsInner() {
     },
     {
       id: "actions",
-      header: "",
-      headerClassName: "w-10",
-      cell: (t) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onClick={() => router.push(`/admin/tickets/${t.id}`)}>
-              <Eye className="size-4" />
-              View
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => action.mutate({ id: t.id, action: "resend" })}>
-              <Send className="size-4" />
-              Resend email
-            </DropdownMenuItem>
-            <ConfirmDialog
-              trigger={
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <RotateCcw className="size-4" />
-                  Reset (new QR)
-                </DropdownMenuItem>
-              }
-              title="Reset this ticket?"
-              description="The old QR code stops working and a brand-new pass is emailed to the holder."
-              confirmLabel="Reset ticket"
-              onConfirm={async () => {
-                await action.mutateAsync({ id: t.id, action: "reset" });
-              }}
-            />
-            {t.status !== "REVOKED" && (
-              <ConfirmDialog
-                trigger={
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                    <Ban className="size-4" />
-                    Revoke
-                  </DropdownMenuItem>
-                }
-                title="Revoke this ticket?"
-                description="The pass is invalidated and its seat is freed."
-                confirmLabel="Revoke"
-                destructive
-                onConfirm={async () => {
-                  await action.mutateAsync({ id: t.id, action: "revoke" });
-                }}
-              />
-            )}
-            <DropdownMenuSeparator />
-            <ConfirmDialog
-              trigger={
-                <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-red-600 focus:text-red-600"
-                >
-                  <Trash2 className="size-4" />
-                  Delete
-                </DropdownMenuItem>
-              }
-              title="Delete this ticket?"
-              description="Permanently removes the ticket record and frees its seat."
-              confirmLabel="Delete"
-              destructive
-              onConfirm={async () => {
-                await action.mutateAsync({ id: t.id, action: "delete" });
-              }}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      header: "Actions",
+      headerClassName: "w-52",
+      cell: (t) => <div onClick={(event) => event.stopPropagation()}><ActionMenu actions={[
+        { label: "View ticket", icon: <Eye className="size-4" />, run: () => router.push(`/admin/tickets/${t.id}`) },
+        { label: "Resend email", icon: <Send className="size-4" />, run: () => action.mutateAsync({ id: t.id, action: "resend" }) },
+        { label: "Reset ticket", icon: <RotateCcw className="size-4" />, disabled: t.status !== "VALID", confirm: { title: "Reset this ticket?", description: "The old QR stops working and a new ticket is emailed." }, run: () => action.mutateAsync({ id: t.id, action: "reset" }) },
+        { label: "Revoke ticket", icon: <Ban className="size-4" />, disabled: t.status === "REVOKED", confirm: { title: "Revoke this ticket?", description: "Invalidates the ticket and frees the seat.", destructive: true }, run: () => action.mutateAsync({ id: t.id, action: "revoke" }) },
+        { label: "Delete ticket", icon: <Trash2 className="size-4" />, confirm: { title: "Delete this ticket?", description: "Permanently removes the ticket record.", destructive: true }, run: () => action.mutateAsync({ id: t.id, action: "delete" }) },
+      ]} /></div>,
     },
   ];
 
@@ -174,23 +103,11 @@ function TicketsInner() {
         }
       />
 
-      {isPending ? (
-        <TableSkeleton cols={6} />
-      ) : error ? (
+      {error ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
-      ) : (data ?? []).length === 0 ? (
-        <EmptyState
-          icon={<TicketIcon className="size-5" />}
-          title="No tickets"
-          message="Tickets appear here once participants complete registration or you add guests."
-          action={
-            <Button asChild>
-              <Link href="/admin/tickets/new">Generate ticket</Link>
-            </Button>
-          }
-        />
       ) : (
         <DataTable
+          loading={isPending}
           data={data ?? []}
           columns={columns}
           getRowId={(t) => t.id}
@@ -224,7 +141,7 @@ function TicketsInner() {
 
 export default function TicketsPage() {
   return (
-    <Suspense fallback={<TableSkeleton cols={6} />}>
+    <Suspense fallback={<AdminListSkeleton kind="tickets" />}>
       <TicketsInner />
     </Suspense>
   );

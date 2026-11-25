@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +11,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { EventPicker } from "@/components/admin/EventPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -36,20 +37,26 @@ export default function NewParticipantPage() {
   });
 
   async function onSubmit(v: ParticipantCreateValues) {
-    await create.mutateAsync({ ...v, phone: v.phone || undefined });
-    router.push("/admin/attendees");
+    try {
+      await create.mutateAsync({ ...v, phone: v.phone || undefined });
+      router.push("/admin/attendees");
+    } catch { /* The mutation displays the API error; keep entered values. */ }
   }
 
   return (
     <div className="w-full">
       <PageHeader
         title="Add participant"
+        description="Register one person, or import a list of 100+ participants together."
+        actions={<Button variant="outline" asChild><Link href="/admin/attendees/import">Import CSV or paste rows</Link></Button>}
         crumbs={[{ label: "Participants", href: "/admin/attendees" }, { label: "New" }]}
       />
       <Card className="w-full shadow-none">
-        <CardContent className="pt-6">
+        <CardHeader><CardTitle>Registration details</CardTitle><CardDescription>Choose an event and add the participant’s contact information. Optional fields can be completed later.</CardDescription></CardHeader>
+        <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <fieldset disabled={create.isPending} className="space-y-5">
               <FormField
                 control={form.control}
                 name="eventId"
@@ -63,7 +70,7 @@ export default function NewParticipantPage() {
                   </FormItem>
                 )}
               />
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="name"
@@ -71,7 +78,7 @@ export default function NewParticipantPage() {
                     <FormItem>
                       <FormLabel>Full name</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input autoComplete="name" placeholder="Full name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -84,7 +91,7 @@ export default function NewParticipantPage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="email" {...field} />
+                        <Input autoComplete="email" placeholder="name@example.com" type="email" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -97,7 +104,7 @@ export default function NewParticipantPage() {
                     <FormItem>
                       <FormLabel>Phone (optional)</FormLabel>
                       <FormControl>
-                        <Input {...field} value={field.value ?? ""} />
+                        <Input type="tel" autoComplete="tel" placeholder="+250…" {...field} value={field.value ?? ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -152,7 +159,8 @@ export default function NewParticipantPage() {
                   )}
                 />
               </div>
-              <div className="flex justify-end gap-2">
+              </fieldset>
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => router.push("/admin/attendees")}>
                   Cancel
                 </Button>

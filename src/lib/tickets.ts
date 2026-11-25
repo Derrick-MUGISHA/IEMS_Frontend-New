@@ -12,7 +12,7 @@ import {
   type ParticipantDoc,
   type TicketHolderType,
 } from "@/models";
-import { ticketQrPngBuffer, ticketQrDataUrl } from "./qr";
+import { canonicalTicketQrUrl, canonicalTicketQrPng } from "./qr";
 import { fetchImageBuffer } from "./imageFetch";
 import { appUrl } from "./appUrl";
 import { sendTicketEmail } from "./mailer";
@@ -173,7 +173,7 @@ export async function issueTicket(holder: Holder, opts: { email?: boolean } = {}
     /* build the PDF + send the email in the background so the visitor gets
        their pass on screen at once; the ticket is valid either way and the
        email lands moments later */
-    void emailTicket(holder, event, ticket.code)
+    void emailTicket(holder, event, ticket.code, ticket)
       .then(async () => {
         ticket.sentAt = new Date();
         await ticket.save();
@@ -186,8 +186,8 @@ export async function issueTicket(holder: Holder, opts: { email?: boolean } = {}
   return ticket;
 }
 
-/* Load the live Participant/Guest holder behind a ticket, as a Holder. Returns
-   null after check-in (holder deleted) — admin actions target live tickets. */
+/* Load the Participant/Guest holder behind a ticket. Older checked-in tickets
+   may have only a snapshot because previous versions deleted holder records. */
 export async function holderOfTicket(ticket: TicketDoc): Promise<Holder | null> {
   if (ticket.holderType === "Participant") {
     const doc = await Participant.findById(ticket.holderId);
@@ -203,7 +203,7 @@ export async function resendTicket(ticket: HydratedDocument<TicketDoc>): Promise
   const holder = await holderOfTicket(ticket);
   const event = await Event.findById(ticket.event);
   if (!holder || !event) return false;
-  await emailTicket(holder, event, ticket.code);
+  await emailTicket(holder, event, ticket.code, ticket);
   ticket.sentAt = new Date();
   await ticket.save();
   return true;
@@ -216,46 +216,39 @@ export async function resetTicket(ticket: HydratedDocument<TicketDoc>): Promise<
   const event = await Event.findById(ticket.event);
   if (!holder || !event) return false;
   ticket.code = randomUUID();
+  ticket.qrIssuedAt = new Date();
   ticket.ticketNumber = await mintTicketNumber(event);
   ticket.status = "VALID";
   ticket.scannedAt = null;
   ticket.resetCount += 1;
   await ticket.save();
-  await emailTicket(holder, event, ticket.code);
+  await emailTicket(holder, event, ticket.code, ticket);
   ticket.sentAt = new Date();
   await ticket.save();
   return true;
 }
 
-export async function emailTicket(holder: Holder, event: EventDoc, code: string) {
+export async function emailTicket(holder: Holder, event: EventDoc, code: string,
+  ticket: Pick<TicketDoc, "ticketNumber" | "status" | "issuedAt" | "qrIssuedAt">) {
   const view = holderView(holder);
-  const qr = await ticketQrPngBuffer(code, {
-    name: view.name,
-    type: view.type,
-    eventName: event.name,
-  });
   const url = appUrl(`/ticket/${code}`);
-  const role = await roleLine(holder);
-
-  /* pull the profile photo and event poster concurrently — the poster becomes
-     the pass background (PDF) and email banner. Either can fail without
-     invalidating the pass. */
   const posterUrl = event.gallery?.[0] ?? null;
-  const [photo, eventImage] = await Promise.all([
-    fetchImageBuffer(view.photoUrl),
-    fetchImageBuffer(posterUrl),
+  const [role, eventImage, qrPng] = await Promise.all([
+    roleLine(holder), fetchImageBuffer(posterUrl),
+    canonicalTicketQrPng({ code, issuedAt: ticket.issuedAt, qrIssuedAt: ticket.qrIssuedAt }),
   ]);
 
   const pdf = await ticketPdfBuffer({
     name: view.name,
-    role,
     type: view.type,
     eventName: event.name,
     eventDate: event.startTime,
     venue: event.location,
     code,
-    qrPng: qr,
-    photo,
+    ticketNumber: ticket?.ticketNumber,
+    status: ticket?.status === "VALID" && new Date() > eventDeadline(event) ? "EXPIRED" : ticket?.status,
+    qrPng,
+    subtitle: event.details,
     eventImage,
     eventType: event.type,
     price: event.price,
@@ -275,7 +268,6 @@ export async function emailTicket(holder: Holder, event: EventDoc, code: string)
     ticketCode: code,
     ticketUrl: url,
     validUntil: eventDeadline(event),
-    qrPng: qr,
     pdf,
   });
 }
@@ -302,7 +294,7 @@ export async function ticketIdentity(ticket: TicketDoc): Promise<{
   return {
     name: ticket.holder?.name ?? "Attendee",
     email: ticket.holder?.email ?? "",
-    type: ticket.holder?.label ?? ticket.holderType?.toUpperCase() ?? "GUEST",
+    type: ticket.holderType === "Participant" ? "PARTICIPANT" : ticket.holder?.label ?? "GUEST",
     photoUrl: ticket.holder?.photoUrl ?? null,
   };
 }
@@ -320,16 +312,20 @@ export async function buildTicketView(ticket: TicketDoc, opts: { qr?: boolean } 
     eventId: ticket.event,
     eventName: event?.name ?? null,
     registeredAt: ticket.issuedAt,
+    sentAt: ticket.sentAt ?? null,
     status: ticket.status,
     scannedAt: ticket.scannedAt ?? null,
     cancelledAt: ticket.cancelledAt ?? null,
     ...(opts.qr
       ? {
-          qrDataUrl: await ticketQrDataUrl(ticket.code, {
-            name: who.name,
-            type: who.type,
-            eventName: event?.name,
-          }),
+          code: ticket.code,
+          holderType: who.type,
+          photoUrl: who.photoUrl,
+          eventDate: event?.startTime ?? null,
+          venue: event?.location ?? null,
+          gallery: event?.gallery ?? [], organiser: event?.organiser, subtitle: event?.details, price: event?.price,
+          expiresAt: event ? eventDeadline(event) : null,
+          qrDataUrl: await canonicalTicketQrUrl(ticket),
         }
       : {}),
   };

@@ -35,6 +35,7 @@ export const eventCreateSchema = z.object({
   price: z.string().default("Free"),
   location: z.string().default(""),
   isPublished: z.boolean().default(false),
+  status: z.enum(EVENT_STATUSES).default("DRAFT"),
 });
 export type EventCreateInput = z.input<typeof eventCreateSchema>;
 export type EventCreateValues = z.output<typeof eventCreateSchema>;
@@ -46,8 +47,8 @@ export type EventEditValues = z.output<typeof eventEditSchema>;
 
 /* one schema the shared EventForm binds to (slug + status both present); each
    page sends the relevant subset to the API. */
-export const eventFormSchema = eventCreateSchema.extend({
-  status: z.enum(EVENT_STATUSES).default("DRAFT"),
+export const eventFormSchema = eventCreateSchema.superRefine((value, context) => {
+  if (value.endTime && new Date(value.endTime) <= new Date(value.startTime)) context.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after the start time" });
 });
 export type EventFormValues = z.output<typeof eventFormSchema>;
 export type EventFormInput = z.input<typeof eventFormSchema>;
@@ -70,11 +71,11 @@ export const participantCreateSchema = z.object({
 export type ParticipantCreateValues = z.output<typeof participantCreateSchema>;
 
 export const participantEditSchema = z.object({
-  name: z.string().min(2).optional(),
-  email: z.string().email("Valid email required").optional(),
+  name: z.string().trim().min(2).optional(),
+  email: z.string().trim().email("Valid email required").optional(),
   phone: z.string().min(6).optional().or(z.literal("")),
-  stack: z.enum(STACKS).optional(),
-  gender: z.enum(GENDERS).optional(),
+  stack: z.enum(STACKS).nullable().optional(),
+  gender: z.enum(GENDERS).nullable().optional(),
   registrationStatus: z.enum(REGISTRATION_STATUSES).optional(),
 });
 export type ParticipantEditValues = z.output<typeof participantEditSchema>;

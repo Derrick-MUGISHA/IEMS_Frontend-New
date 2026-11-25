@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ExternalLink } from "lucide-react";
-import { useNotifications } from "@/hooks/admin/dashboard";
+import { ExternalLink } from "lucide-react";
+import NotificationBell from "@/components/admin/NotificationBell";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -17,13 +17,15 @@ const TITLES: Record<string, string> = {
   scanners: "Scanners",
   notifications: "Notifications",
   scan: "Scan tickets",
+  emails: "Emails",
+  status: "API status",
+  "api-docs": "API docs",
 };
 
 export function SiteHeader() {
   const pathname = usePathname();
   const seg = pathname.split("/")[2] ?? "dashboard";
   const title = TITLES[seg] ?? "Admin";
-  const unread = useNotifications().data?.unread ?? 0;
 
   return (
     <header className="m-2 flex h-14 shrink-0 items-center gap-2 rounded-xl border border-border bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -32,14 +34,7 @@ export function SiteHeader() {
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-8" />
         <h1 className="display text-base font-semibold">{title}</h1>
         <div className="ml-auto flex items-center gap-1">
-          <Button asChild variant="ghost" size="icon" className="relative" aria-label="Notifications">
-            <Link href="/admin/notifications">
-              <Bell className="size-5" />
-              {unread > 0 && (
-                <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
-              )}
-            </Link>
-          </Button>
+          <NotificationBell />
           <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
             <Link href="/" target="_blank">
               <ExternalLink className="size-4" />

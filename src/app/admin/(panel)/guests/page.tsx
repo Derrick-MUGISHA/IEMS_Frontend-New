@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -156,11 +156,9 @@ export default function GuestsPage() {
         }
       />
 
-      {isPending ? (
-        <TableSkeleton cols={6} />
-      ) : error ? (
+      {error ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
-      ) : (data ?? []).length === 0 ? (
+      ) : !isPending && (data ?? []).length === 0 ? (
         <EmptyState
           icon={<UserPlus className="size-5" />}
           title="No guests yet"
@@ -176,6 +174,7 @@ export default function GuestsPage() {
         />
       ) : (
         <DataTable
+          loading={isPending}
           data={rows}
           columns={columns}
           getRowId={(g) => g.id}

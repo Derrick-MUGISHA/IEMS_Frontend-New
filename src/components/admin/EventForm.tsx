@@ -1,15 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useRef, useState, type ReactNode } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { eventFormSchema, type EventFormInput, type EventFormValues } from "@/schemas/admin";
 import { EVENT_CATEGORIES, EVENT_TYPES, EVENT_STATUSES } from "@/types/admin";
-import { CalendarDays, Clock, Link2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Clock, Link2, Plus, Trash2, Check, ArrowLeft, ArrowRight, MapPin, Users, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatEventDateTime, kigaliInputToISO } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { EventImage } from "./EventImage";
 import { ImageUploader } from "@/components/admin/ImageUploader";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import {
@@ -33,7 +35,7 @@ export type EventFormProps = {
   mode: "create" | "edit";
   defaultValues?: Partial<EventFormInput>;
   submitting?: boolean;
-  onSubmit: (values: EventFormValues) => void;
+  onSubmit: (values: EventFormValues) => void | Promise<void>;
   onCancel?: () => void;
 };
 
@@ -56,7 +58,7 @@ const BASE: EventFormInput = {
 };
 
 /* consistent, evenly-rounded controls across the whole form (xl, never pills) */
-const CONTROL = "rounded-xl";
+const CONTROL = "rounded-md";
 
 /* a titled frame that groups related fields, so the form reads as sections
    instead of one long column */
@@ -65,19 +67,21 @@ function Section({
   description,
   children,
   cols = 1,
+  hidden = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   cols?: 1 | 2;
+  hidden?: boolean;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card/40 p-5 sm:p-6">
+    <section hidden={hidden} className="rounded-lg border border-border bg-card/40 p-5 sm:p-6">
       <div className="mb-5">
         <h2 className="display text-base font-semibold text-foreground">{title}</h2>
         {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
-      <div className={cn("grid gap-5", cols === 2 && "sm:grid-cols-2")}>{children}</div>
+      <div className={cn("grid gap-5", cols === 2 && "sm:grid-cols-2 items-start")}>{children}</div>
     </section>
   );
 }
@@ -98,7 +102,7 @@ function DateTimeField({ value, onChange }: { value: string; onChange: (v: strin
         <Input
           type="date"
           aria-label="Date"
-          className={cn(CONTROL, "pl-9")}
+          className={cn(CONTROL, "pl-9 [color-scheme:dark]")}
           value={date}
           onChange={(e) => commit(e.target.value, time)}
         />
@@ -108,7 +112,7 @@ function DateTimeField({ value, onChange }: { value: string; onChange: (v: strin
         <Input
           type="time"
           aria-label="Time"
-          className={cn(CONTROL, "pl-9")}
+          className={cn(CONTROL, "pl-9 [color-scheme:dark]")}
           value={time}
           onChange={(e) => commit(date, e.target.value)}
         />
@@ -123,15 +127,51 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
     defaultValues: { ...BASE, ...defaultValues },
   });
 
-  /* drop empty rule rows before handing the values up */
-  const submit = form.handleSubmit((values) =>
-    onSubmit({ ...values, rules: values.rules.map((r) => r.trim()).filter(Boolean) })
+  const [step, setStep] = useState(0);
+  const saving = useRef(false);
+  const lastSlug = useRef(defaultValues?.slug ?? "");
+  const values = useWatch({ control: form.control });
+  const steps = ["Event overview", "Schedule & venue", "Artwork & review"];
+  const stepFields: (keyof EventFormInput)[][] = [
+    ["name", "slug", "category", "type", "details", "status"],
+    ["startTime", "endTime", "location", "organiser", "maxAttendees", "price"],
+    ["gallery", "rules", "isPublished"],
+  ];
+  const next = async () => { if (await form.trigger(stepFields[step], { shouldFocus: true })) setStep((value) => Math.min(2, value + 1)); };
+  const submit = form.handleSubmit(
+    async (data) => {
+      try { await onSubmit({ ...data, rules: data.rules.map((rule) => rule.trim()).filter(Boolean) }); }
+      catch { /* Mutation errors are displayed by the page; retain the event draft. */ }
+    },
+    (errors) => {
+      const key = Object.keys(errors)[0] as keyof EventFormInput;
+      const target = stepFields.findIndex((fields) => fields.includes(key));
+      if (target >= 0) setStep(target);
+      setTimeout(() => form.setFocus(key), 0);
+    },
   );
+  const save = async () => {
+    if (saving.current || submitting) return;
+    saving.current = true;
+    try { await submit(); }
+    finally { saving.current = false; }
+  };
+  const previewDate = values.startTime && Number.isFinite(Date.parse(values.startTime))
+    ? formatEventDateTime(kigaliInputToISO(values.startTime)) : "Choose the date and time";
 
   return (
     <Form {...form}>
-      <form onSubmit={submit} className="space-y-6">
-        <Section title="Basics" description="Name, address and how the event is classified." cols={2}>
+      <form onSubmit={(event) => event.preventDefault()} className="space-y-6">
+        <nav aria-label="Event form steps" className="grid gap-2 sm:grid-cols-3">
+          {steps.map((title, index) => <button key={title} type="button" aria-current={step === index ? "step" : undefined}
+            onClick={() => { if (index < step) setStep(index); else if (index > step) void next(); }}
+            className={cn("flex items-center gap-3 rounded-md border p-4 text-left text-sm transition-colors", step === index ? "border-primary/60 bg-primary/10" : "border-border bg-card hover:bg-muted/40")}>
+            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold", index <= step ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>{index < step ? <Check className="size-4" /> : index + 1}</span><span className="font-medium">{title}</span>
+          </button>)}
+        </nav>
+        {Object.keys(form.formState.errors).length > 0 && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-red-300">Please correct the highlighted fields before continuing.</p>}
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="min-w-0 space-y-6">
+        <Section hidden={step !== 0} title="Event information" description="Tell attendees what you are organising." cols={2}>
           <FormField
             control={form.control}
             name="name"
@@ -139,7 +179,14 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
               <FormItem className="sm:col-span-2">
                 <FormLabel>Event name</FormLabel>
                 <FormControl>
-                  <Input placeholder="Women in Tech Night" className={CONTROL} {...field} />
+                  <Input placeholder="e.g. Women in Tech Night" className={CONTROL} {...field} onChange={(event) => {
+                    field.onChange(event);
+                    if (mode === "create" && (!form.getValues("slug") || form.getValues("slug") === lastSlug.current)) {
+                      const slug = event.target.value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                      lastSlug.current = slug;
+                      form.setValue("slug", slug, { shouldValidate: false });
+                    }
+                  }} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -151,9 +198,9 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
               name="slug"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Slug</FormLabel>
+                  <FormLabel>Event link</FormLabel>
                   <FormControl>
-                    <div className="flex items-stretch overflow-hidden rounded-xl border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
+                    <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
                       <span className="flex items-center gap-1.5 border-r border-input bg-muted/40 px-3 text-sm text-muted-foreground select-none">
                         <Link2 className="size-3.5" />
                         /events/
@@ -161,11 +208,11 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
                       <input
                         {...field}
                         placeholder="women-in-tech-night"
-                        className="h-8 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
+                        className="h-11 min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
                       />
                     </div>
                   </FormControl>
-                  <FormDescription>Lowercase, hyphenated. Can&apos;t change later.</FormDescription>
+                  <FormDescription>Generated from the event name. You can adjust it before saving; it stays fixed afterwards.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -219,7 +266,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
               </FormItem>
             )}
           />
-          {mode === "edit" && (
+          {(
             <FormField
               control={form.control}
               name="status"
@@ -247,7 +294,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           )}
         </Section>
 
-        <Section title="Date & time" description="When the doors open and, optionally, close. Times are Kigali time (GMT+2)." cols={2}>
+        <Section hidden={step !== 1} title="Date & time" description="When the doors open and, optionally, close. Times are Kigali time (GMT+2)." cols={2}>
           <FormField
             control={form.control}
             name="startTime"
@@ -276,7 +323,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           />
         </Section>
 
-        <Section title="Location & capacity" description="Where it happens and how many can attend." cols={2}>
+        <Section hidden={step !== 1} title="Location & capacity" description="Where it happens and how many can attend." cols={2}>
           <FormField
             control={form.control}
             name="location"
@@ -341,7 +388,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           />
         </Section>
 
-        <Section title="Details" description="Describe the event — use bold, italics and lists to keep it readable.">
+        <Section hidden={step !== 0} title="About this event" description="Describe the event — use bold, italics and lists to keep it readable.">
           <FormField
             control={form.control}
             name="details"
@@ -361,8 +408,9 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
         </Section>
 
         <Section
-          title="Rules & regulations"
-          description="One rule per row — each gets its own line on the attendee's pass."
+          hidden={step !== 2}
+          title="Attendance information"
+          description="Optional instructions shown to attendees before registration."
         >
           <FormField
             control={form.control}
@@ -410,8 +458,9 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
         </Section>
 
         <Section
-          title="Event images"
-          description="The first image is used as the event poster. PNG or JPG, up to 8MB each."
+          hidden={step !== 2}
+          title="Event artwork"
+          description="The first image is the event poster and ticket background. Keep the full original image. PNG or JPG, up to 8 MB each."
         >
           <FormField
             control={form.control}
@@ -431,7 +480,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           control={form.control}
           name="isPublished"
           render={({ field }) => (
-            <FormItem className="flex items-center justify-between rounded-2xl border border-border bg-card/40 p-5 sm:p-6">
+            <FormItem className={cn("flex items-center justify-between rounded-lg border border-border bg-card/40 p-5 sm:p-6", step !== 2 && "hidden")}>
               <div>
                 <FormLabel>Published</FormLabel>
                 <FormDescription>Show this event on the public calendar.</FormDescription>
@@ -443,16 +492,27 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           )}
         />
 
-        <div className="flex justify-end gap-2">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Saving…" : mode === "create" ? "Create event" : "Save changes"}
-          </Button>
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/95 p-4 backdrop-blur">
+          <span className="text-xs text-muted-foreground">Step {step + 1} of 3</span><div className="flex flex-wrap gap-2">
+            {onCancel && <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>}
+            {step > 0 && <Button type="button" variant="outline" onClick={() => setStep(step - 1)}><ArrowLeft className="size-4" />Back</Button>}
+            {step < 2 ? <Button key="continue" type="button" onClick={() => void next()}>Continue<ArrowRight className="size-4" /></Button> : <Button key="save" type="button" onClick={() => void save()} disabled={submitting || form.formState.isSubmitting}>{submitting || form.formState.isSubmitting ? "Saving…" : mode === "create" ? "Create event" : "Save changes"}</Button>}
+          </div>
         </div>
+        </div><aside className="space-y-4 rounded-lg border border-border bg-card p-5 xl:sticky xl:top-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event preview</p>
+          <EventImage images={values.gallery as string[] | undefined} name={values.name || "New event"} className="aspect-[3/2] w-full" />
+          <h2 className="break-words text-xl font-semibold">{values.name || "Your event name"}</h2>
+          <p className="text-xs text-muted-foreground">{values.category} · {values.type?.toLowerCase()}</p>
+          <div className="space-y-3 border-y border-border py-4 text-sm">
+            <p className="flex items-start gap-2"><CalendarDays className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{previewDate}<span className="sr-only">Kigali time</span></p>
+            <p className="flex items-start gap-2"><MapPin className="size-4 shrink-0 text-muted-foreground" />{values.location || "Add a venue"}</p>
+            <p className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" />{Number(values.maxAttendees) > 0 ? `${values.maxAttendees} places` : "Unlimited capacity"}</p>
+            <p className="flex items-center gap-2"><Globe className="size-4 text-muted-foreground" />{values.isPublished ? "Visible on public calendar" : "Not listed publicly"}</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Registration: <b className="capitalize text-foreground">{values.status?.toLowerCase()}</b>. Times use Africa/Kigali (GMT+2).</p>
+          <p className="text-xs text-muted-foreground">The artwork will also appear on the single PDF ticket issued to every attendee.</p>
+        </aside></div>
       </form>
     </Form>
   );

@@ -17,6 +17,7 @@ const csp = [
   "img-src 'self' data: blob: https://res.cloudinary.com",
   "font-src 'self' data:",
   "connect-src 'self'",
+  "frame-src 'self' blob:",
   "worker-src 'self' blob:",
 ].join("; ");
 
@@ -30,11 +31,15 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   reactCompiler: true,
-  serverExternalPackages: ["pdfkit", "sharp"],
+  serverExternalPackages: ["pdfkit", "sharp", "cloudinary"],
   // outputFileTracingIncludes removed — serverExternalPackages handles sharp
   outputFileTracingRoot: __dirname,
-  allowedDevOrigins: ["https://events.igirerwanda.org"],
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./public/fonts/tickets/*.ttf"],
+  },
+  allowedDevOrigins: ["events.igirerwanda.org", ...(process.env.NEXT_PUBLIC_APP_URL ? [new URL(process.env.NEXT_PUBLIC_APP_URL).hostname] : [])],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

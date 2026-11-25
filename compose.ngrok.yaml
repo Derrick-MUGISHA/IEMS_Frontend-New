@@ -1,0 +1,8 @@
+services:
+  app:
+    build:
+      args:
+        NEXT_PUBLIC_APP_URL: ${IEMS_PUBLIC_APP_URL:?Start with pnpm dev or pnpm start}
+    environment:
+      NEXT_PUBLIC_APP_URL: ${IEMS_PUBLIC_APP_URL:?Start with pnpm dev or pnpm start}
+

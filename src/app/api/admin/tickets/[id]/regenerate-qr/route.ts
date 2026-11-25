@@ -1,10 +1,9 @@
 import { randomUUID } from "crypto";
 import { isValidObjectId } from "mongoose";
 import { dbConnect } from "@/lib/db";
-import { Event, Ticket } from "@/models";
+import { Ticket } from "@/models";
 import { requireAdmin } from "@/lib/auth";
-import { ticketQrDataUrl } from "@/lib/qr";
-import { ticketIdentity } from "@/lib/tickets";
+import { canonicalTicketQrUrl } from "@/lib/qr";
 import { ok, unauthorized, notFound, fail } from "@/lib/http";
 
 /* Admin: rotate a ticket's QR secret. The old QR/code is invalidated the
@@ -20,17 +19,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await dbConnect();
   const ticket = await Ticket.findById(id);
   if (!ticket) return notFound("Ticket");
-  if (ticket.status === "REVOKED") return fail("This ticket has been cancelled", 409);
+  if (ticket.status !== "VALID") return fail("Only an unused, valid ticket can receive a new QR", 409);
 
   ticket.code = randomUUID();
+  ticket.qrIssuedAt = new Date();
   await ticket.save();
 
-  const [event, who] = await Promise.all([Event.findById(ticket.event), ticketIdentity(ticket)]);
-  const qrDataUrl = await ticketQrDataUrl(ticket.code, {
-    name: who.name,
-    type: who.type,
-    eventName: event?.name,
-  });
+  const qrDataUrl = await canonicalTicketQrUrl(ticket);
 
   return ok({ ticket: { id: ticket._id, ticketNumber: ticket.ticketNumber }, qrDataUrl });
 }

@@ -43,9 +43,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/* medium-weight labels with a gentle slide + icon nudge on hover */
 const NAV_ITEM =
-  "font-medium transition-[transform,background-color,color] duration-200 hover:translate-x-0.5 [&>svg]:transition-transform [&>svg]:duration-200 hover:[&>svg]:scale-110";
+  "admin-nav-link relative min-h-11 rounded-lg border border-transparent px-3 text-sm font-medium transition-colors [&>svg]:size-5 [&>svg]:shrink-0";
 
 const MAIN = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -81,8 +80,8 @@ export function AppSidebar() {
     .toUpperCase();
 
   return (
-    <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
+    <Sidebar collapsible="icon" variant="inset" className="admin-sidebar">
+      <SidebarHeader className="border-b border-sidebar-border pb-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" className="data-[slot=sidebar-menu-button]:p-1.5!">
@@ -124,12 +123,13 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
+          <SidebarGroupLabel>Manage</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
               {MAIN.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label} className={NAV_ITEM}>
-                    <Link href={item.href}>
+                    <Link href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>
                       <item.icon />
                       <span>{item.label}</span>
                     </Link>
@@ -147,7 +147,7 @@ export function AppSidebar() {
               {OPERATIONS.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label} className={NAV_ITEM}>
-                    <Link href={item.href}>
+                    <Link href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>
                       <item.icon />
                       <span>{item.label}</span>
                     </Link>
@@ -158,18 +158,19 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto">
+        <SidebarGroup className="mt-auto border-t border-sidebar-border pt-3">
+          <SidebarGroupLabel>Resources</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {SECONDARY.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     asChild
-                    size="sm"
+                    isActive={isActive(item.href)}
                     tooltip={item.label}
-                    className="rounded-full font-medium transition-transform duration-200 hover:translate-x-0.5"
+                    className={NAV_ITEM}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>
                       <item.icon />
                       <span>{item.label}</span>
                     </Link>
@@ -181,7 +182,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>

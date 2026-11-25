@@ -74,6 +74,7 @@ export type AdminEvent = {
   gallery: string[];
   organiser: string;
   maxAttendees: number;
+  registeredCount?: number;
   details: string;
   rules: string[];
   status: EventStatus;
@@ -84,7 +85,7 @@ export type AdminEvent = {
 
 /* ------------------------------------------------------------ Participants */
 type EventRef = { id: string; name?: string; startTime?: string; status?: string } | null;
-type TicketRef = { code?: string; status: TicketStatus; scannedAt: string | null } | null;
+type TicketRef = { id?: string; code?: string; status: TicketStatus; scannedAt: string | null } | null;
 
 export type AdminParticipant = {
   id: string;
@@ -95,7 +96,7 @@ export type AdminParticipant = {
   stack: Stack | null;
   gender: Gender | null;
   status: ParticipantStatus;
-  registrationStatus: RegistrationStatus;
+  registrationStatus?: RegistrationStatus;
   profilePicture: string | null;
   event: EventRef;
   ticket: TicketRef;
@@ -115,7 +116,7 @@ export type ParticipantProfile = {
     status: ParticipantStatus;
     registrationStatus: RegistrationStatus;
     registeredAt: string;
-    event: { id: string; name: string; startTime: string } | null;
+    event: { id: string; name: string; startTime: string; endTime?: string; gallery?: string[]; location?: string; organiser?: string; details?: string; price?: string } | null;
   };
   ticket: {
     id: string;
@@ -156,7 +157,7 @@ export type GuestProfile = {
     profile: string | null;
     guestType: GuestType;
     registeredAt: string;
-    event: { id: string; name: string; startTime: string } | null;
+    event: { id: string; name: string; startTime: string; endTime?: string; gallery?: string[]; location?: string; organiser?: string; details?: string; price?: string } | null;
     inviter: { id: string; name: string; email: string } | null;
   };
   ticket: {
@@ -183,7 +184,15 @@ export type AdminTicket = {
   status: TicketStatus;
   scannedAt: string | null;
   cancelledAt: string | null;
+  sentAt?: string | null;
   qrDataUrl?: string;
+  code?: string;
+  holderType?: string;
+  photoUrl?: string | null;
+  eventDate?: string | null;
+  venue?: string | null;
+  expiresAt?: string | null;
+  gallery?: string[]; organiser?: string; subtitle?: string; price?: string;
 };
 
 /* --------------------------------------------------------------- Scanners */
@@ -290,6 +299,9 @@ export type EmailLogRow = {
 export type EmailFunnelRow = {
   eventId: string;
   eventName: string;
+  gallery?: string[];
+  startTime?: string;
+  location?: string;
   started: number;
   neverVerified: number;
   verifiedNotCompleted: number;
@@ -311,7 +323,7 @@ export type EmailReport = {
     total: number;
   };
   funnel: {
-    overall: Omit<EmailFunnelRow, "eventId" | "eventName"> & {
+    overall: Omit<EmailFunnelRow, "eventId" | "eventName" | "gallery" | "startTime" | "location"> & {
       abandoned: number;
       completionRate: number;
     };
@@ -326,6 +338,7 @@ export type EmailTemplatePreview = {
   description: string;
   subject: string;
   html: string;
+  from?: string;
 };
 
 export type EmailDetail = EmailLogRow & { html: string };

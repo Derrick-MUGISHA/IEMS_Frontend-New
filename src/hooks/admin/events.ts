@@ -11,7 +11,10 @@ export function useEvents() {
   return useQuery({
     queryKey: adminKeys.events,
     queryFn: () => eventsService.list().then((d) => d.events),
-    staleTime: 15_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
 }
 
@@ -42,6 +45,8 @@ export function useCreateEvent() {
     mutationFn: (body: EventCreateValues) => eventsService.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.events });
+      qc.invalidateQueries({ queryKey: adminKeys.dashboard });
+      qc.invalidateQueries({ queryKey: adminKeys.eventStats });
       toast.success("Event created");
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -55,6 +60,8 @@ export function useUpdateEvent() {
       eventsService.update(vars.id, vars.body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.events });
+      qc.invalidateQueries({ queryKey: adminKeys.dashboard });
+      qc.invalidateQueries({ queryKey: adminKeys.eventStats });
       toast.success("Event updated");
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -67,6 +74,8 @@ export function useDeleteEvent() {
     mutationFn: (id: string) => eventsService.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.events });
+      qc.invalidateQueries({ queryKey: adminKeys.dashboard });
+      qc.invalidateQueries({ queryKey: adminKeys.eventStats });
       toast.success("Event deleted");
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -80,6 +89,8 @@ export function useUploadEventImage() {
       eventsService.uploadImage(vars.id, vars.file),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.events });
+      qc.invalidateQueries({ queryKey: adminKeys.dashboard });
+      qc.invalidateQueries({ queryKey: adminKeys.eventStats });
       toast.success("Image added to gallery");
     },
     onError: (e) => toast.error(errorMessage(e)),

@@ -1,14 +1,19 @@
 "use client";
 
+import { Button as SdkButton } from "@ui-sdk/react/button";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import gsap from "gsap";
+import { CalendarDays } from "lucide-react";
+import { EmptyState } from "./admin/states";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { CATEGORY_COLORS, type VenueEvent } from "@/lib/events";
 import { useEvents } from "@/lib/useEvents";
 import { useEventFlow } from "@/components/EventFlow";
 
 gsap.registerPlugin(ScrollTrigger);
+const MotionButton = motion.create(SdkButton);
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -66,7 +71,7 @@ function buildCells(year: number, month: number): Cell[] {
 type View = "calendar" | "upcoming";
 
 /* Placeholder board shown while the real events are being fetched */
-function BoardSkeleton() {
+function BoardSkeleton({ days }: { days: number }) {
   return (
     <div
       role="status"
@@ -104,7 +109,7 @@ function BoardSkeleton() {
           ))}
         </div>
         <div className="grid grid-cols-7">
-          {Array.from({ length: 35 }, (_, i) => (
+          {Array.from({ length: days }, (_, i) => (
             <div
               key={i}
               className="min-h-20 border-b border-r border-line bg-panel p-2 nth-[7n]:border-r-0 sm:min-h-28"
@@ -200,12 +205,12 @@ export default function MonthCalendar() {
                   ["upcoming", "Upcoming"],
                 ] as [View, string][]
               ).map(([value, text]) => (
-                <button
+                <SdkButton
                   key={value}
                   type="button"
                   onClick={() => setView(value)}
                   aria-pressed={view === value}
-                  className={`relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                  className={`public-action relative rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                     view === value ? "text-bg" : "text-cream hover:text-orange"
                   }`}
                 >
@@ -217,37 +222,37 @@ export default function MonthCalendar() {
                     />
                   )}
                   <span className="relative">{text}</span>
-                </button>
+                </SdkButton>
               ))}
             </div>
 
             {view === "calendar" && (
               <div className="flex items-center gap-2">
-                <button
+                <SdkButton
                   type="button"
                   onClick={() => goMonth(0)}
-                  className="rounded-lg border border-line bg-panel px-4 py-2 text-sm font-medium text-cream transition-colors hover:border-orange hover:text-orange"
+                  className="public-action rounded-lg border border-line bg-panel px-4 py-2 text-sm font-medium text-cream transition-colors hover:border-orange hover:text-orange"
                 >
                   Today
-                </button>
-                <button
+                </SdkButton>
+                <SdkButton
                   type="button"
                   onClick={() => goMonth(safeIndex - 1)}
                   disabled={safeIndex === 0}
                   aria-label="Previous month"
-                  className="rounded-lg border border-line bg-panel px-3.5 py-2 text-cream transition-colors enabled:hover:border-orange enabled:hover:text-orange disabled:opacity-40"
+                  className="public-action rounded-lg border border-line bg-panel px-3.5 py-2 text-cream transition-colors enabled:hover:border-orange enabled:hover:text-orange disabled:opacity-40"
                 >
                   ‹
-                </button>
-                <button
+                </SdkButton>
+                <SdkButton
                   type="button"
                   onClick={() => goMonth(safeIndex + 1)}
                   disabled={safeIndex >= months.length - 1}
                   aria-label="Next month"
-                  className="rounded-lg border border-line bg-panel px-3.5 py-2 text-cream transition-colors enabled:hover:border-orange enabled:hover:text-orange disabled:opacity-40"
+                  className="public-action rounded-lg border border-line bg-panel px-3.5 py-2 text-cream transition-colors enabled:hover:border-orange enabled:hover:text-orange disabled:opacity-40"
                 >
                   ›
-                </button>
+                </SdkButton>
               </div>
             )}
           </div>
@@ -255,19 +260,19 @@ export default function MonthCalendar() {
 
         <div className="reveal overflow-hidden rounded-xl border border-line">
           {isPending ? (
-            <BoardSkeleton />
+            <BoardSkeleton days={cells.length} />
           ) : isError ? (
             <div className="flex flex-col items-center gap-4 bg-panel px-5 py-14 text-center">
               <p className="text-sm text-cream-dim">
                 Couldn&apos;t load the events. Please try again.
               </p>
-              <button
+              <SdkButton
                 type="button"
                 onClick={() => refetch()}
-                className="rounded-lg border border-line bg-panel-2 px-4 py-2 text-sm font-medium text-cream transition-colors hover:border-orange hover:text-orange"
+                className="public-action rounded-lg border border-line bg-panel-2 px-4 py-2 text-sm font-medium text-cream transition-colors hover:border-orange hover:text-orange"
               >
                 Retry
-              </button>
+              </SdkButton>
             </div>
           ) : (
           <AnimatePresence mode="wait" initial={false}>
@@ -287,9 +292,7 @@ export default function MonthCalendar() {
                 {/* mobile: schedule view, like Google Calendar */}
                 <div className="bg-panel sm:hidden">
                   {eventDays.length === 0 && (
-                    <p className="px-5 py-10 text-center text-sm text-cream-dim">
-                      No events this month yet.
-                    </p>
+                    <EmptyState icon={<CalendarDays className="size-6" aria-hidden="true" />} title="No events this month" />
                   )}
                   <ul>
                     {eventDays.map((dayKey) => {
@@ -323,11 +326,11 @@ export default function MonthCalendar() {
                           </div>
                           <div className="flex min-w-0 flex-1 flex-col gap-2">
                             {dayEvents.map((event) => (
-                              <button
+                              <SdkButton
                                 key={event.id}
                                 type="button"
                                 onClick={() => openEvent(event)}
-                                className="block w-full cursor-pointer rounded-lg px-3.5 py-2.5 text-left text-bg"
+                                className="public-action block w-full cursor-pointer rounded-lg px-3.5 py-2.5 text-left text-bg"
                                 style={{
                                   backgroundColor:
                                     CATEGORY_COLORS[event.category],
@@ -340,7 +343,7 @@ export default function MonthCalendar() {
                                   {event.time} at {event.space} ·{" "}
                                   {event.soldOut ? "Sold out" : event.price}
                                 </span>
-                              </button>
+                              </SdkButton>
                             ))}
                           </div>
                         </li>
@@ -397,7 +400,7 @@ export default function MonthCalendar() {
                             </span>
                           </div>
                           {dayEvents.map((event) => (
-                            <motion.button
+                            <MotionButton
                               key={event.id}
                               type="button"
                               onClick={() => openEvent(event)}
@@ -405,7 +408,7 @@ export default function MonthCalendar() {
                               title={`${event.title} — ${event.time}, ${
                                 event.space
                               }. ${event.soldOut ? "Sold out" : event.price}`}
-                              className="mb-1 block w-full cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-left text-[10px] font-semibold leading-tight wrap-break-word text-bg sm:text-xs"
+                              className="public-action mb-1 block h-auto min-h-0 w-full cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-left text-[10px] font-semibold leading-tight wrap-break-word text-bg sm:text-xs"
                               style={{
                                 backgroundColor:
                                   CATEGORY_COLORS[event.category],
@@ -420,7 +423,7 @@ export default function MonthCalendar() {
                                   (Sold out)
                                 </span>
                               )}
-                            </motion.button>
+                            </MotionButton>
                           ))}
                         </div>
                       );
@@ -443,9 +446,7 @@ export default function MonthCalendar() {
                 className="cursor-grab bg-panel active:cursor-grabbing"
               >
                 {upcoming.length === 0 && (
-                  <li className="px-5 py-10 text-center text-sm text-cream-dim">
-                    No upcoming events yet — check back soon.
-                  </li>
+                  <li><EmptyState icon={<CalendarDays className="size-6" aria-hidden="true" />} title="No upcoming events" /></li>
                 )}
                 {upcoming.map((event) => {
                   const d = new Date(`${event.date}T00:00:00`);
@@ -466,10 +467,10 @@ export default function MonthCalendar() {
                         }`,
                       }}
                     >
-                      <button
+                      <SdkButton
                         type="button"
                         onClick={() => openEvent(event)}
-                        className="grid w-full cursor-pointer grid-cols-[64px_1fr] items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-panel-2 sm:grid-cols-[80px_1fr_auto] sm:px-6"
+                        className="public-action grid w-full cursor-pointer grid-cols-[64px_1fr] items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-panel-2 sm:grid-cols-[80px_1fr_auto] sm:px-6"
                       >
                         <span className="text-center">
                           <span className="display block text-2xl leading-none text-orange sm:text-3xl">
@@ -510,7 +511,7 @@ export default function MonthCalendar() {
                             </span>
                           )}
                         </span>
-                      </button>
+                      </SdkButton>
                     </li>
                   );
                 })}

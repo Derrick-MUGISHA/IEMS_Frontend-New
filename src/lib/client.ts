@@ -4,6 +4,7 @@
 
 import type { Role } from "@/store/authSlice";
 import { bridgeGetToken, bridgeOnUnauthorized, bridgeRefresh } from "./authBridge";
+import { prepareImageUpload } from "./prepareImageUpload";
 
 /* localStorage keys — only admin & scanner persist here (they carry long
    bearer tokens); the participant relies on the refresh cookie instead. */
@@ -28,6 +29,7 @@ type ApiOptions = {
   form?: FormData;
   /** send/receive cookies (needed for the refresh endpoint) */
   credentials?: RequestCredentials;
+  signal?: AbortSignal;
 };
 
 async function rawFetch(path: string, opts: ApiOptions, token: string | null): Promise<Response> {
@@ -45,10 +47,19 @@ async function rawFetch(path: string, opts: ApiOptions, token: string | null): P
     headers,
     body,
     credentials: opts.credentials,
+    signal: opts.signal,
   });
 }
 
-export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
+async function request(path: string, opts: ApiOptions): Promise<Response> {
+  if (opts.form && (["/api/admin/uploads", "/api/me/photo"].includes(path) || /^\/api\/admin\/events\/[^/]+\/poster$/.test(path))) {
+    const form = new FormData();
+    for (const [key, value] of opts.form) {
+      try { form.append(key, value instanceof File ? await prepareImageUpload(value) : value); }
+      catch (error) { throw new ApiError(error instanceof Error ? error.message : "Invalid image", 400); }
+    }
+    opts = { ...opts, form, signal: opts.signal ?? AbortSignal.timeout(75_000) };
+  }
   const token = opts.role ? bridgeGetToken(opts.role) : null;
   let res = await rawFetch(path, opts, token);
 
@@ -65,9 +76,27 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
     }
   }
 
+  return res;
+}
+
+export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
+  const res = await request(path, opts).catch((error) => {
+    if (opts.form && error instanceof Error && error.name === "TimeoutError") throw new ApiError("Image upload timed out. Please check your connection and try again.", 504);
+    throw error;
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError((data as { error?: string }).error ?? "Something went wrong", res.status);
   }
   return data as T;
+}
+
+/** Binary ticket downloads share the JSON client's role and refresh behavior. */
+export async function apiBlob(path: string, opts: ApiOptions = {}): Promise<Blob> {
+  const res = await request(path, opts);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError((data as { error?: string }).error ?? "Could not load the ticket", res.status);
+  }
+  return res.blob();
 }

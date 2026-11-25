@@ -1,3 +1,5 @@
+import { Button as SdkButton } from "@ui-sdk/react/button";
+import type { ComponentProps } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -148,20 +150,20 @@ export function Button({
   variant?: "primary" | "ghost";
   /** shows the spinner and disables the button */
   busy?: boolean;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+} & Omit<ComponentProps<typeof SdkButton>, "children">) {
   const styles =
     variant === "primary"
-      ? "bg-orange text-bg hover:bg-orange-deep disabled:opacity-50"
+      ? "border border-transparent bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       : "border border-line text-cream hover:border-orange hover:text-orange disabled:opacity-50";
   return (
-    <button
+    <SdkButton
       {...props}
       disabled={busy || props.disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all active:scale-[0.98] ${styles} ${props.className ?? ""}`}
+      className={`public-action portal-button inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold transition-all active:scale-[0.98] ${styles} ${props.className ?? ""}`}
     >
       {busy && <Spinner className="h-4 w-4" />}
       {children}
-    </button>
+    </SdkButton>
   );
 }
 
@@ -179,12 +181,13 @@ export function StatusBadge({ value }: { value: string }) {
     VALID: "bg-green/20 text-green",
     USED: "bg-panel-2 text-cream-dim",
     REVOKED: "bg-terracotta/20 text-terracotta",
+    EXPIRED: "bg-tan/20 text-tan",
     OPEN: "bg-green/20 text-green",
     DRAFT: "bg-panel-2 text-cream-dim",
     CLOSED: "bg-terracotta/20 text-terracotta",
   };
   return (
-    <span className={`label rounded px-2 py-0.5 text-[10px] font-bold ${tone[value] ?? "bg-panel-2 text-cream-dim"}`}>
+    <span className={`label rounded-md px-2 py-0.5 text-[10px] font-bold ${tone[value] ?? "bg-panel-2 text-cream-dim"}`}>
       {value}
     </span>
   );

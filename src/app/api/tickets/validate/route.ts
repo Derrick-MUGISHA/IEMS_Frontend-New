@@ -9,7 +9,7 @@ import { ok, fail, unauthorized } from "@/lib/http";
    pass. Accepts either a raw QR token or a ticket code. Gate staff only. */
 const Body = z.object({
   qr: z.string().min(10).optional(),
-  code: z.string().min(6).optional(),
+  code: z.string().trim().min(6).max(200).optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,7 +29,9 @@ export async function POST(req: Request) {
   }
 
   await dbConnect();
-  const ticket = code ? await Ticket.findOne({ code }) : null;
+  const ticket = code ? await Ticket.findOne(parsed.data.qr
+    ? { code }
+    : { $or: [{ code }, { ticketNumber: code.toUpperCase() }] }) : null;
   if (!ticket) return ok({ valid: false, reason: "UNKNOWN", message: "Ticket not found." });
 
   const [event, who] = await Promise.all([Event.findById(ticket.event), ticketIdentity(ticket)]);
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
   const expired = deadline ? new Date() > deadline : false;
 
   const reason =
-    ticket.status === "REVOKED"
+    !event ? "UNKNOWN_EVENT" : ticket.status === "REVOKED"
       ? "REVOKED"
       : ticket.status === "USED"
         ? "ALREADY_USED"

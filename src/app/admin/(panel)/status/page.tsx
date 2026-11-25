@@ -132,8 +132,8 @@ export default function StatusPage() {
   const { data, isPending, isFetching, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["admin", "health"],
     queryFn: () => api<Health>("/api/admin/health", { role: "admin" }),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
   });
   const live = useLiveConnection();
 
@@ -143,11 +143,11 @@ export default function StatusPage() {
 
   const strengthLabel =
     live.strength === "strong"
-      ? "Strong"
+      ? "Connected"
       : live.strength === "good"
-        ? "Good"
+        ? "Connected"
         : live.strength === "weak"
-          ? "Weak"
+          ? "Reconnecting"
           : "Offline";
 
   return (
@@ -169,16 +169,16 @@ export default function StatusPage() {
       {/* overall banner, GitHub-status style */}
       <div
         className={cn(
-          "mb-6 flex items-center gap-3 rounded-xl px-5 py-4 text-white",
-          allOk ? "bg-green-600" : "bg-amber-600"
+          "mb-6 flex items-center gap-3 rounded-xl border bg-card px-5 py-4 text-foreground",
+          allOk ? "border-green/30" : "border-orange/30"
         )}
       >
-        {allOk ? <CheckCircle2 className="size-6" /> : <XCircle className="size-6" />}
+        {allOk ? <CheckCircle2 className="size-6 text-green" /> : <XCircle className="size-6 text-orange" />}
         <div>
           <p className="text-lg font-semibold">
             {allOk ? "All Systems Operational" : "Partial Service Disruption"}
           </p>
-          <p className="text-xs text-white/80">
+          <p className="text-xs text-muted-foreground">
             {dataUpdatedAt ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Checking…"} ·
             re-checks every 15s
           </p>
@@ -232,7 +232,7 @@ export default function StatusPage() {
             <div className="border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold">Realtime connection</h2>
               <p className="text-xs text-muted-foreground">
-                The live socket that streams scans &amp; notifications
+                Streams scans and notifications. Connection time includes the server and tunnel, not Wi-Fi signal strength.
               </p>
             </div>
             <StatusRow
@@ -241,7 +241,7 @@ export default function StatusPage() {
               ok={socketOk}
               detail={
                 socketOk
-                  ? `Signal: ${strengthLabel}${live.latencyMs != null ? ` · ${live.latencyMs}ms handshake` : ""}`
+                  ? `Stream: ${strengthLabel}${live.latencyMs != null ? ` · ${live.latencyMs}ms handshake` : ""}`
                   : live.state === "connecting"
                     ? "Connecting…"
                     : "Disconnected — retrying"
@@ -249,9 +249,9 @@ export default function StatusPage() {
               right={<SignalBars strength={live.strength} />}
             />
             <div className="grid grid-cols-3 divide-x divide-border">
-              <Stat label="Signal" value={strengthLabel} />
+              <Stat label="Stream" value={strengthLabel} />
               <Stat
-                label="Handshake"
+                label="Initial connection"
                 value={live.latencyMs != null ? `${live.latencyMs}ms` : "—"}
               />
               <Stat label="Reconnects" value={String(live.reconnects)} />

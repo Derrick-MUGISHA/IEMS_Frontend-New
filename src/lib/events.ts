@@ -59,9 +59,9 @@ export const CATEGORIES: EventCategory[] = [
 /* IRO brand family — greens and burnt oranges pulled from the logo */
 export const CATEGORY_COLORS: Record<EventCategory, string> = {
   SheCanCODE: "#f59300",
-  Entrepreneurship: "#e2603a",
+  Entrepreneurship: "#f08066",
   "Web Fundamentals": "#d4b458",
-  "Advanced Backend": "#7cc35a",
+  "Advanced Backend": "#83c66b",
   "Advanced Frontend": "#a9d4a0",
   Mentorship: "#ffffff",
 };

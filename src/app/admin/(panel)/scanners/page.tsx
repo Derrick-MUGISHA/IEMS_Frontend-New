@@ -8,7 +8,7 @@ import type { AdminScanner } from "@/types/admin";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/admin/states";
+import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -131,11 +131,9 @@ export default function ScannersPage() {
         }
       />
 
-      {isPending ? (
-        <TableSkeleton cols={5} />
-      ) : error ? (
+      {error ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
-      ) : (data ?? []).length === 0 ? (
+      ) : !isPending && (data ?? []).length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="size-5" />}
           title="No scanner accounts"
@@ -148,6 +146,7 @@ export default function ScannersPage() {
         />
       ) : (
         <DataTable
+          loading={isPending}
           data={data ?? []}
           columns={columns}
           getRowId={(s) => s.id}

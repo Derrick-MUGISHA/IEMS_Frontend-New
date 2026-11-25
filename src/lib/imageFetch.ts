@@ -4,6 +4,13 @@
    pass, so this always resolves — returning null when the image can't be had. */
 
 const DEFAULT_TIMEOUT_MS = 5_000;
+const images = new Map<string, { until: number; value: Promise<Buffer | null>; bytes: number }>();
+let cachedBytes = 0;
+
+function forget(key: string) {
+  cachedBytes -= images.get(key)?.bytes ?? 0;
+  images.delete(key);
+}
 
 export async function fetchImageBuffer(
   url: string | null | undefined,
@@ -20,6 +27,26 @@ export async function fetchImageBuffer(
     }
   }
 
+  const key = `${timeoutMs}:${url}`;
+  const cached = images.get(key);
+  if (cached && cached.until > Date.now()) return cached.value;
+  forget(key);
+  const entry = { until: Date.now() + 60_000, value: downloadImage(url, timeoutMs), bytes: 0 };
+  images.set(key, entry);
+  while (images.size > 24) forget(images.keys().next().value!);
+  const image = await entry.value;
+  if (images.get(key) === entry) {
+    if (!image || image.length > 4 * 1024 * 1024) forget(key);
+    else {
+      entry.bytes = image.length;
+      cachedBytes += image.length;
+      while (cachedBytes > 16 * 1024 * 1024) forget(images.keys().next().value!);
+    }
+  }
+  return image;
+}
+
+async function downloadImage(url: string, timeoutMs: number): Promise<Buffer | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
