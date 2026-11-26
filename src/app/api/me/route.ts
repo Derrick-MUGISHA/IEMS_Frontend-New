@@ -4,7 +4,7 @@ import { Event, Guest, Participant, Ticket, GENDERS, STACKS } from "@/models";
 import { requireAttendee } from "@/lib/auth";
 import { roleLine } from "@/lib/tickets";
 import { ticketPreview } from "@/lib/ticketPreview";
-import { claimPlusOneSlot } from "@/lib/plusOneSlots";
+import { canAddPlusOne } from "@/lib/plusOneSlots";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
 export async function GET(req: Request) {
@@ -15,8 +15,8 @@ export async function GET(req: Request) {
   const participant = await Participant.findById(participantId);
   if (!participant) return notFound("Registration");
 
-  /* claimed before the event is read so the places shown include their own */
-  const plusOneAllowed = await claimPlusOneSlot(participant);
+  /* places are only used by guests actually added, so this just checks room */
+  const plusOneAllowed = await canAddPlusOne(participant);
   const [event, ticket, plusOne] = await Promise.all([
     Event.findById(participant.event),
     Ticket.findOne({ holderType: "Participant", holderId: participant._id }),
