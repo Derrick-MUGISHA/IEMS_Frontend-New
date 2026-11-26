@@ -15,6 +15,7 @@ const Body = z
     gallery: z.array(z.string().url()),
     organiser: z.string(),
     maxAttendees: z.number().int().min(0),
+    plusOneLimit: z.number().int().min(0),
     details: z.string(),
     rules: z.array(z.string()),
     status: z.enum(EVENT_STATUSES),

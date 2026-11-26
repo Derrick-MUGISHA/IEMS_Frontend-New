@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import { dbConnect } from "@/lib/db";
 import { Event, Participant, Guest, Ticket, EmailLog, EMAIL_KINDS } from "@/models";
 import { requireAdmin } from "@/lib/auth";
+import { unresolvedFailures, RETRYABLE_EMAIL_KINDS } from "@/lib/emailRetry";
 import { ok, unauthorized, notFound } from "@/lib/http";
 
 /* Per-event engagement stats that complement the aggregate numbers on the event
@@ -49,10 +50,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
         { $group: { _id: { kind: "$kind", status: "$status" }, n: { $sum: 1 } } },
       ])
     : [];
-  const byKind = Object.fromEntries(EMAIL_KINDS.map((k) => [k, { sent: 0, failed: 0 }])) as Record<
-    string,
-    { sent: number; failed: number }
-  >;
+  const byKind = Object.fromEntries(
+    EMAIL_KINDS.map((k) => [
+      k,
+      { sent: 0, failed: 0, stillFailing: 0, retryable: (RETRYABLE_EMAIL_KINDS as readonly string[]).includes(k) },
+    ])
+  ) as Record<string, { sent: number; failed: number; stillFailing: number; retryable: boolean }>;
   let emailTotal = 0;
   for (const row of byKindAgg as { _id: { kind: string; status: string }; n: number }[]) {
     const bucket = byKind[row._id.kind];
@@ -60,6 +63,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       bucket[row._id.status === "SENT" ? "sent" : "failed"] += row.n;
       emailTotal += row.n;
     }
+  }
+
+  for (const f of await unresolvedFailures(emails)) {
+    const bucket = byKind[f.kind];
+    if (bucket) bucket.stillFailing += 1;
   }
 
   return ok({

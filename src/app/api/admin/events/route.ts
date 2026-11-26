@@ -3,6 +3,7 @@ import { dbConnect } from "@/lib/db";
 import { Event, EVENT_CATEGORIES, EVENT_TYPES, EVENT_STATUSES } from "@/models";
 import { requireAdmin } from "@/lib/auth";
 import { publishContentChange } from "@/lib/scanBus";
+import { syncPlusOneSlots } from "@/lib/plusOneSlots";
 import { ok, fail, unauthorized } from "@/lib/http";
 
 export async function GET(req: Request) {
@@ -10,6 +11,7 @@ export async function GET(req: Request) {
   if (!admin) return unauthorized();
 
   await dbConnect();
+  await syncPlusOneSlots();
   const events = await Event.find().sort({ startTime: -1 });
   return ok({
     events: events.map((e) => ({
@@ -24,6 +26,8 @@ export async function GET(req: Request) {
       organiser: e.organiser,
       maxAttendees: e.maxAttendees,
       registeredCount: e.registeredCount,
+      plusOneLimit: e.plusOneLimit ?? 0,
+      plusOneSlotsTaken: e.plusOneSlotsTaken ?? 0,
       details: e.details,
       rules: e.rules,
       status: e.status,
@@ -47,6 +51,7 @@ const Body = z.object({
   gallery: z.array(z.string().url()).default([]),
   organiser: z.string().default("Igire Rwanda Organization"),
   maxAttendees: z.number().int().min(0).default(0),
+  plusOneLimit: z.number().int().min(0).default(0),
   details: z.string().default(""),
   rules: z.array(z.string()).default([]),
   price: z.string().default("Free"),

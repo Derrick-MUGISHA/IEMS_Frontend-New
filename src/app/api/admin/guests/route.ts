@@ -34,6 +34,7 @@ export async function GET(req: Request) {
         email: g.email,
         guestType: g.guestType,
         invitedBy: (g.inviter as unknown as { name?: string } | null)?.name ?? null,
+        eventId: (g.event as unknown as { _id?: unknown } | null)?._id?.toString() ?? null,
         eventName: (g.event as unknown as { name?: string } | null)?.name ?? null,
         addedAt: g.createdAt,
         ticket: (() => {
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
         email: t.holder!.email,
         guestType: t.holder!.label ?? "GENERAL",
         invitedBy: null,
+        eventId: (t.event as unknown as { _id?: unknown } | null)?._id?.toString() ?? null,
         eventName: (t.event as unknown as { name?: string } | null)?.name ?? null,
         addedAt: t.issuedAt,
         ticket: { code: t.code, status: t.status, scannedAt: t.scannedAt ?? null },

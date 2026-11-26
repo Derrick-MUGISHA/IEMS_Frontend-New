@@ -12,6 +12,8 @@ import type {
   EmailTemplatePreview,
   SendPassResult,
   AdminGuest,
+  EmailKind,
+  EmailRetrySummary,
   AdminNotification,
   AdminParticipant,
   AdminScanner,
@@ -75,6 +77,8 @@ export const eventsService = {
       form,
     });
   },
+  retryFailedEmails: (id: string, kind: EmailKind) =>
+    api<EmailRetrySummary>(`/api/admin/events/${id}/emails/retry`, { role: "admin", body: { kind } }),
   sendReminders: (id: string, message?: string) =>
     api<{ recipients: number; sent: number; failed: number }>(
       `/api/admin/events/${id}/reminders`,

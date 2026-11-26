@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Eye, MoreHorizontal, Pencil, Trash2, UserPlus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, MoreHorizontal, Pencil, Trash2, UserPlus, X } from "lucide-react";
 import { useGuests, useDeleteGuest } from "@/hooks/admin/guests";
 import { GUEST_TYPES, type AdminGuest } from "@/types/admin";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { DataTable, type Column } from "@/components/admin/DataTable";
+import { EventPicker } from "@/components/admin/EventPicker";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { EmptyState, ErrorState } from "@/components/admin/states";
@@ -30,13 +31,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function GuestsPage() {
+function GuestsInner() {
   const router = useRouter();
   const { data, isPending, error, refetch } = useGuests();
   const del = useDeleteGuest();
+  const params = useSearchParams();
   const [type, setType] = useState("all");
+  const [event, setEvent] = useState(params.get("event") ?? "all");
 
-  const rows = (data ?? []).filter((g) => type === "all" || g.guestType === type);
+  const rows = (data ?? []).filter(
+    (g) => (type === "all" || g.guestType === type) && (event === "all" || g.eventId === event)
+  );
 
   const columns: Column<AdminGuest>[] = [
     {
@@ -182,6 +187,19 @@ export default function GuestsPage() {
           searchable={(g) => `${g.name} ${g.email}`}
           searchPlaceholder="Search guests…"
           toolbar={
+            <>
+            {(event !== "all" || type !== "all") && (
+              <Button variant="outline" size="sm" onClick={() => { setEvent("all"); setType("all"); }}>
+                <X />
+                Clear filters
+              </Button>
+            )}
+            <EventPicker
+              value={event}
+              onValueChange={setEvent}
+              includeAll
+              className="h-9 w-42.5"
+            />
             <Select value={type} onValueChange={setType}>
               <SelectTrigger className="h-9 w-[150px]">
                 <SelectValue placeholder="Type" />
@@ -195,9 +213,18 @@ export default function GuestsPage() {
                 ))}
               </SelectContent>
             </Select>
+            </>
           }
         />
       )}
     </div>
+  );
+}
+
+export default function GuestsPage() {
+  return (
+    <Suspense fallback={null}>
+      <GuestsInner />
+    </Suspense>
   );
 }

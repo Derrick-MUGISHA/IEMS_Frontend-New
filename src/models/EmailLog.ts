@@ -29,6 +29,8 @@ export interface EmailLogDoc {
   html: string;
   status: EmailStatus;
   error?: string | null;
+  /** set on a FAILED attempt an admin retry found no longer needed */
+  resolvedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +43,7 @@ const EmailLogSchema = new Schema<EmailLogDoc>(
     html: { type: String, default: "" },
     status: { type: String, enum: EMAIL_STATUSES, required: true },
     error: { type: String, default: null },
+    resolvedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

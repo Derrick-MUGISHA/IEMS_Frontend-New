@@ -55,6 +55,11 @@ export interface EventDoc {
   /** atomic capacity counter — reserved slots (non-revoked tickets). Source of
       truth for concurrency-safe capacity checks; reconciled with tickets. */
   registeredCount: number;
+  /** how many participants may bring a plus-one — the first N to accept their
+      invitation (verify their email) claim these places. 0 = unlimited. */
+  plusOneLimit: number;
+  /** atomic counter of plus-one places already claimed (≤ plusOneLimit) */
+  plusOneSlotsTaken: number;
   /** 11. details on the event */
   details: string;
   /** 12. rules and regulations of the event */
@@ -85,6 +90,8 @@ const EventSchema = new Schema<EventDoc>(
     organiser: { type: String, trim: true, default: "Igire Rwanda Organization" },
     maxAttendees: { type: Number, default: 0, min: 0 },
     registeredCount: { type: Number, default: 0, min: 0 },
+    plusOneLimit: { type: Number, default: 0, min: 0 },
+    plusOneSlotsTaken: { type: Number, default: 0, min: 0 },
     details: { type: String, default: "" },
     rules: { type: [String], default: [] },
     status: { type: String, enum: EVENT_STATUSES, default: "DRAFT" },
@@ -105,4 +112,15 @@ export const Event: Model<EventDoc> =
 export function eventDeadline(event: Pick<EventDoc, "startTime" | "endTime">): Date {
   if (event.endTime) return new Date(event.endTime);
   return endOfEventDay(event.startTime);
+}
+
+export type PlusOnePlaces = { limit: number; taken: number; remaining: number | null; full: boolean };
+
+export function plusOnePlaces(
+  event: Pick<EventDoc, "plusOneLimit" | "plusOneSlotsTaken">
+): PlusOnePlaces {
+  const limit = event.plusOneLimit ?? 0;
+  const taken = event.plusOneSlotsTaken ?? 0;
+  if (limit <= 0) return { limit: 0, taken, remaining: null, full: false };
+  return { limit, taken, remaining: Math.max(0, limit - taken), full: taken >= limit };
 }

@@ -1,4 +1,14 @@
 import { Button as SdkButton } from "@ui-sdk/react/button";
+import {
+  Select as SdkSelect,
+  SelectContent,
+  SelectItem,
+  SelectItemIndicator,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@ui-sdk/react/select";
+import { Check, ChevronDown } from "lucide-react";
 import type { ComponentProps } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -122,21 +132,64 @@ export function Field({
   );
 }
 
-export function Select({
+export function Select<T extends string>({
   label,
-  children,
-  ...props
-}: { label: string } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  value,
+  onValueChange,
+  options,
+  placeholder = "Select…",
+  required,
+  disabled,
+  name,
+}: {
+  label: string;
+  value: T | "";
+  onValueChange: (value: T) => void;
+  options: readonly (readonly [T, string])[];
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  name?: string;
+}) {
   return (
-    <label className="block text-left">
-      <span className="label mb-1.5 block text-xs font-semibold text-cream-dim">{label}</span>
-      <select
-        {...props}
-        className="w-full rounded-lg border border-line bg-panel-2 px-3.5 py-2.5 text-cream transition-colors focus:border-orange focus:outline-none"
-      >
-        {children}
-      </select>
-    </label>
+    <SdkSelect<T>
+      value={value === "" ? null : value}
+      onValueChange={(next) => {
+        if (next) onValueChange(next);
+      }}
+      items={options.map(([v, text]) => ({ value: v, label: text }))}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      name={name}
+    >
+      <div className="block text-left">
+        <SelectLabel className="label mb-1.5 block text-xs font-semibold text-cream-dim">
+          {label}
+        </SelectLabel>
+        <SelectTrigger className="flex h-auto w-full items-center justify-between gap-3 rounded-lg border border-line bg-panel-2 px-3.5 py-2.5 text-left text-cream transition-colors hover:border-orange/60 focus-visible:border-orange focus-visible:outline-none data-[open]:border-orange data-[placeholder]:text-cream-dim/70">
+          <SelectValue className="truncate" />
+          <ChevronDown className="size-4 shrink-0 text-cream-dim transition-transform in-data-[open]:rotate-180" aria-hidden="true" />
+        </SelectTrigger>
+        <SelectContent
+          sideOffset={6}
+          className="w-(--anchor-width) max-h-(--available-height) overflow-y-auto rounded-xl border border-line bg-panel-2 p-1.5 text-cream shadow-2xl shadow-black/40"
+        >
+          {options.map(([v, text]) => (
+            <SelectItem
+              key={v}
+              value={v}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm text-cream outline-none transition-colors data-[highlighted]:bg-orange/15 data-[highlighted]:text-orange data-[selected]:font-semibold data-[selected]:text-orange"
+            >
+              {text}
+              <SelectItemIndicator>
+                <Check className="size-4 text-orange" aria-hidden="true" />
+              </SelectItemIndicator>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </div>
+    </SdkSelect>
   );
 }
 

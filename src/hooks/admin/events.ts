@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { eventsService } from "@/services/admin";
 import type { EventCreateValues, EventUpdateBody } from "@/schemas/admin";
+import type { EmailKind } from "@/types/admin";
 import { adminKeys } from "./keys";
 import { errorMessage } from "./util";
 
@@ -102,6 +103,24 @@ export function useSendReminders() {
     mutationFn: (vars: { id: string; message?: string }) =>
       eventsService.sendReminders(vars.id, vars.message),
     onSuccess: (r) => toast.success(`Sent to ${r.sent} of ${r.recipients}`),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+export function useRetryFailedEmails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; kind: EmailKind }) =>
+      eventsService.retryFailedEmails(vars.id, vars.kind),
+    onSuccess: (r, vars) => {
+      qc.invalidateQueries({ queryKey: adminKeys.eventEngagement(vars.id) });
+      const parts = [`${r.sent.length} re-sent`];
+      if (r.skipped.length) parts.push(`${r.skipped.length} no longer needed`);
+      if (r.failed.length) parts.push(`${r.failed.length} failed again`);
+      const message = parts.join(", ");
+      if (r.failed.length) toast.error(message);
+      else toast.success(message);
+    },
     onError: (e) => toast.error(errorMessage(e)),
   });
 }

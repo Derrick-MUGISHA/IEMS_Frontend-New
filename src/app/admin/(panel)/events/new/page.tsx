@@ -25,6 +25,7 @@ export default function NewEventPage() {
       gallery: v.gallery,
       organiser: v.organiser,
       maxAttendees: v.maxAttendees,
+      plusOneLimit: v.plusOneLimit,
       details: v.details,
       rules: v.rules,
       price: v.price,

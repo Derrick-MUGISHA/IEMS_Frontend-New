@@ -30,6 +30,10 @@ export const eventCreateSchema = z.object({
   gallery,
   organiser: z.string().min(2, "Organiser is required"),
   maxAttendees: z.coerce.number().int().min(0, "0 or more (0 = uncapped)"),
+  plusOneLimit: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : v),
+    z.coerce.number().int().min(0, "0 or more (empty = unlimited)")
+  ),
   details: z.string().default(""),
   rules,
   price: z.string().default("Free"),

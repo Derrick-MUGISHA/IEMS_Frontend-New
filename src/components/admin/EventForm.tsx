@@ -5,7 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { eventFormSchema, type EventFormInput, type EventFormValues } from "@/schemas/admin";
 import { EVENT_CATEGORIES, EVENT_TYPES, EVENT_STATUSES } from "@/types/admin";
-import { CalendarDays, Clock, Link2, Plus, Trash2, Check, ArrowLeft, ArrowRight, MapPin, Users, Globe } from "lucide-react";
+import { CalendarDays, Clock, Link2, Plus, Trash2, Check, ArrowLeft, ArrowRight, MapPin, Users, Globe, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatEventDateTime, kigaliInputToISO } from "@/lib/time";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ const BASE: EventFormInput = {
   gallery: [],
   organiser: "Igire Rwanda Organization",
   maxAttendees: 0,
+  plusOneLimit: 0,
   details: "",
   rules: [],
   price: "Free",
@@ -134,7 +135,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
   const steps = ["Event overview", "Schedule & venue", "Artwork & review"];
   const stepFields: (keyof EventFormInput)[][] = [
     ["name", "slug", "category", "type", "details", "status"],
-    ["startTime", "endTime", "location", "organiser", "maxAttendees", "price"],
+    ["startTime", "endTime", "location", "organiser", "maxAttendees", "plusOneLimit", "price"],
     ["gallery", "rules", "isPublished"],
   ];
   const next = async () => { if (await form.trigger(stepFields[step], { shouldFocus: true })) setStep((value) => Math.min(2, value + 1)); };
@@ -375,6 +376,33 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
           />
           <FormField
             control={form.control}
+            name="plusOneLimit"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Plus-one limit</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Unlimited"
+                    className={CONTROL}
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={field.value ? String(field.value) : ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                  />
+                </FormControl>
+                <FormDescription>
+                  How many participants may bring a plus-one, first come first served.
+                  Leave empty for unlimited.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="price"
             render={({ field }) => (
               <FormItem>
@@ -508,6 +536,7 @@ export function EventForm({ mode, defaultValues, submitting, onSubmit, onCancel 
             <p className="flex items-start gap-2"><CalendarDays className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{previewDate}<span className="sr-only">Kigali time</span></p>
             <p className="flex items-start gap-2"><MapPin className="size-4 shrink-0 text-muted-foreground" />{values.location || "Add a venue"}</p>
             <p className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" />{Number(values.maxAttendees) > 0 ? `${values.maxAttendees} places` : "Unlimited capacity"}</p>
+            <p className="flex items-center gap-2"><UserPlus className="size-4 text-muted-foreground" />{Number(values.plusOneLimit) > 0 ? `${values.plusOneLimit} plus-one places` : "Unlimited plus-ones"}</p>
             <p className="flex items-center gap-2"><Globe className="size-4 text-muted-foreground" />{values.isPublished ? "Visible on public calendar" : "Not listed publicly"}</p>
           </div>
           <p className="text-xs text-muted-foreground">Registration: <b className="capitalize text-foreground">{values.status?.toLowerCase()}</b>. Times use Africa/Kigali (GMT+2).</p>
