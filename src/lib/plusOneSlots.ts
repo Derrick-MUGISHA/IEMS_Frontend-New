@@ -3,10 +3,10 @@ import { Event, Guest, Participant } from "@/models";
 import { notifyAdmins } from "./notify";
 
 export const PLUS_ONE_FULL_MESSAGE =
-  "All plus-one places for this event have already been filled. Your own registration is confirmed.";
+  "Adding a plus-one isn't available for your registration. Your own registration is confirmed.";
 
 export const PLUS_ONE_FULL_GUEST_MESSAGE =
-  "Sorry, all plus-one places for this event have already been filled, so this invite can no longer be used.";
+  "This plus-one invite is no longer available.";
 
 /* Whether a participant holds one of the event's plus-one places (plusOneLimit,
    0 = unlimited). Places go to participants in the order they accept their

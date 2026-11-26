@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { dbConnect } from "@/lib/db";
-import { Event, Guest, Participant, Ticket, GENDERS, STACKS, plusOnePlaces } from "@/models";
+import { Event, Guest, Participant, Ticket, GENDERS, STACKS } from "@/models";
 import { requireAttendee } from "@/lib/auth";
 import { roleLine } from "@/lib/tickets";
 import { ticketPreview } from "@/lib/ticketPreview";
@@ -85,7 +85,6 @@ export async function GET(req: Request) {
     },
     plusOne: plusOneView,
     plusOneAllowed,
-    plusOnePlaces: event ? plusOnePlaces(event) : null,
   });
 }
 

@@ -130,14 +130,15 @@ describe("existing plus-ones", () => {
 });
 
 describe("registration confirmation email", () => {
-  it("says plainly when plus-one places are full", () => {
+  it("doesn't mention plus-ones at all when no place is left", () => {
     const { html } = renderRegistrationConfirmation({ name: "Aline", eventName: "Demo Day", plusOne: { allowed: false, limit: 40 } });
-    expect(html).toContain("Plus-one places are full.");
-    expect(html).toContain("All 40 plus-one places");
+    expect(html).not.toMatch(/plus-one/i);
+    expect(html).not.toMatch(/full|filled/i);
   });
-  it("confirms a limited place to those who got one", () => {
+  it("offers the plus-one without counts to those who got a place", () => {
     const { html } = renderRegistrationConfirmation({ name: "Aline", eventName: "Demo Day", plusOne: { allowed: true, limit: 40 } });
-    expect(html).toContain("one of the 40 plus-one places");
+    expect(html).toContain("You can also bring a plus-one");
+    expect(html).not.toMatch(/40 plus-one|places/);
   });
   it("mentions no limit when plus-ones are unlimited", () => {
     const { html } = renderRegistrationConfirmation({ name: "Aline", eventName: "Demo Day", plusOne: { allowed: true, limit: 0 } });
