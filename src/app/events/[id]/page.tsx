@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CalendarDays, MapPin, Clock, ArrowLeft, ArrowRight } from "lucide-react";
+import { SkeletonBar } from "@/components/portal/ui";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { useEvents } from "@/lib/useEvents";
@@ -90,29 +91,19 @@ function EventDetail({ event }: { event: VenueEvent }) {
   const accent = CATEGORY_COLORS[event.category];
 
   return (
-    <main className="relative flex-1 overflow-hidden bg-bg">
-      {/* the event's own image crowns the page, then melts through a
-          milk-and-green wash back into the green as you scroll down */}
+    <main className="event-detail-page relative isolate flex-1 bg-bg">
       {event.posterUrl && (
-        <>
+        <div className="event-atmosphere" aria-hidden="true">
           <img
             src={event.posterUrl}
             alt=""
             aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-[75vh] w-full object-cover object-top opacity-45"
+            className="event-atmosphere-image"
           />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-[75vh]"
-            style={{
-              background:
-                "linear-gradient(to bottom, rgba(11,40,24,0.15) 0%, rgba(244,239,222,0.12) 32%, rgba(30,92,56,0.5) 64%, var(--bg) 96%)",
-            }}
-          />
-        </>
+        </div>
       )}
 
-      <div className="relative mx-auto max-w-6xl px-5 py-10">
+      <div className="relative mx-auto max-w-7xl px-5 py-10">
         <Link
           href="/"
           className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-cream-dim transition-colors hover:text-orange"
@@ -121,16 +112,20 @@ function EventDetail({ event }: { event: VenueEvent }) {
           Back to events
         </Link>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_1fr] lg:gap-12">
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12">
           {/* ── left: poster + organiser ── */}
-          <div className="lg:sticky lg:top-24 lg:self-start">
-            <div className="overflow-hidden rounded-3xl border border-line bg-panel/70 shadow-2xl shadow-black/40 backdrop-blur-sm">
+          <div className="event-poster-column min-w-0">
+            <div className="event-poster-frame overflow-hidden rounded-3xl">
               {event.posterUrl ? (
-                <img
-                  src={event.posterUrl}
-                  alt={`${event.title} poster`}
-                  className="aspect-4/5 w-full object-cover"
-                />
+                <>
+                  <img src={event.posterUrl} alt="" aria-hidden="true" className="event-poster-reflection" />
+                  <div className="event-poster-frost" aria-hidden="true" />
+                  <img
+                    src={event.posterUrl}
+                    alt={`${event.title} poster`}
+                    className="event-poster-image"
+                  />
+                </>
               ) : (
                 <div className="flex aspect-4/5 w-full flex-col items-center justify-center gap-4 bg-linear-to-br from-green-deep via-panel-2 to-bg p-8 text-center">
                   <CalendarDays className="size-16 text-orange/70" />
@@ -270,11 +265,8 @@ export default function EventPage() {
     <>
       <Nav />
       {isPending ? (
-        <main className="flex flex-1 items-center justify-center bg-bg py-32">
-          <div className="flex flex-col items-center gap-3 text-cream-dim">
-            <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-orange" />
-            <p className="text-sm">Loading the event…</p>
-          </div>
+        <main className="relative flex-1 bg-bg" aria-busy="true" aria-label="Loading event">
+          <div className="relative mx-auto max-w-7xl px-5 py-10"><SkeletonBar className="mb-8 h-5 w-28" /><div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12"><div className="event-poster-column min-w-0"><SkeletonBar className="event-poster-image aspect-4/5 w-full rounded-3xl" /><div className="mt-4 flex h-[4.5rem] items-center gap-3 rounded-2xl border border-line bg-panel/70 p-4"><SkeletonBar className="size-10 rounded-full" /><SkeletonBar className="h-5 w-44" /></div></div><div className="space-y-6"><SkeletonBar className="h-40 w-full rounded-2xl" /><div className="space-y-3"><SkeletonBar className="h-3 w-24" /><SkeletonBar className="h-12 w-full" /><SkeletonBar className="h-12 w-3/4" /></div><div className="grid gap-3 sm:grid-cols-2"><SkeletonBar className="h-[4.875rem] w-full rounded-xl" /><SkeletonBar className="h-[4.875rem] w-full rounded-xl" /></div><SkeletonBar className="h-28 w-full rounded-2xl" /><SkeletonBar className="h-12 w-full rounded-md" /></div></div></div>
         </main>
       ) : event ? (
         <EventDetail event={event} />

@@ -54,7 +54,8 @@ export type QrIdentity = {
   eventName?: string;
 };
 
-export async function signQrToken(ticketCode: string, who: QrIdentity = {}): Promise<string> {
+export async function signQrToken(ticketCode: string, who: QrIdentity = {}, issuedAt?: Date): Promise<string> {
+  const issued = issuedAt ? Math.floor(issuedAt.getTime() / 1000) : Math.floor(Date.now() / 1000);
   return new SignJWT({
     kind: "qr",
     t: ticketCode,
@@ -63,8 +64,8 @@ export async function signQrToken(ticketCode: string, who: QrIdentity = {}): Pro
     ...(who.eventName ? { e: who.eventName } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("180d")
+    .setIssuedAt(issued)
+    .setExpirationTime(issued + 180 * 86_400)
     .sign(secret());
 }
 

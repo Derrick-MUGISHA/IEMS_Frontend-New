@@ -119,7 +119,7 @@ export function SystemHealth() {
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => refetch()} aria-label="Refresh">
+          <Button variant="ghost" size="icon" onClick={() => refetch()} aria-label="Refresh" className="p-4">
             <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
           </Button>
           <Button asChild variant="outline" size="sm">
@@ -129,7 +129,7 @@ export function SystemHealth() {
       </div>
 
       {/* stat cards, matching the dashboard section cards */}
-      <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+      <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs md:grid-cols-2 xl:grid-cols-4 dark:*:data-[slot=card]:bg-card">
         <StatCard
           label="Uptime"
           value={data ? uptimeLabel(data.uptimeSeconds) : "—"}
@@ -165,12 +165,12 @@ export function SystemHealth() {
           badge={
             <>
               <Inbox />
-              {data?.queue?.ticketEmails ?? 0} sending
+              {data?.queue?.ticketEmails ?? 0} not emailed
             </>
           }
-          footer="Work waiting"
+          footer="Follow-up needed"
           footerIcon={Inbox}
-          hint={`${data?.queue?.awaitingTicket ?? 0} awaiting pass · ${data?.queue?.pendingVerifications ?? 0} unverified`}
+          hint={`${data?.queue?.awaitingTicket ?? 0} awaiting ticket · ${data?.queue?.pendingVerifications ?? 0} unverified`}
         />
         <StatCard
           label="Services"

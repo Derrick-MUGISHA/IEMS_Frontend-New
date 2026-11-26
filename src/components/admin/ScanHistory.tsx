@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "./states";
 import type { ScanHistoryItem } from "@/types/admin";
 
 const icon = (result: string) => {
@@ -13,13 +14,11 @@ export function ScanHistory({ history }: { history: ScanHistoryItem[] }) {
   return (
     <Card className="shadow-none">
       <CardHeader>
-        <CardTitle className="text-base">Scan history</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base"><Clock className="size-4" />Scan history</CardTitle>
       </CardHeader>
       <CardContent>
         {history.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No scans yet — this pass hasn&apos;t been presented at the gate.
-          </p>
+          <EmptyState icon={<Clock aria-hidden="true" className="size-5" />} title="No scans yet" message="This pass hasn’t been presented at the gate." />
         ) : (
           <ul className="space-y-3">
             {history.map((h, i) => (

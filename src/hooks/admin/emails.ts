@@ -43,7 +43,7 @@ export function useSendPassEmails() {
 export function useRunReminders() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => remindersService.runNow(),
+    mutationFn: (eventId: string) => remindersService.runNow(eventId),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["admin", "emails"] });
       qc.invalidateQueries({ queryKey: ["admin", "event-engagement"] });

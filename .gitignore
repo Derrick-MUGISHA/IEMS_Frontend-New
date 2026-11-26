@@ -31,6 +31,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
+.env*
 
 # vercel
 .vercel
@@ -43,7 +44,11 @@ next-env.d.ts
 CLAUDE.md
 
 # Agents.md 
+AGENTS.md
+package-lock.json
 
-AGENTS.mdpackage-lock.json
-branch_structure.json
-.env*
+# Generated ticket samples and PDF visual checks
+/output/pdf/
+/tmp/pdfs/
+.agents/
+AGENTS.md

@@ -1,49 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import {
-  Bell,
-  CheckCheck,
-  Info,
-  ShieldAlert,
-  UserCheck,
-  UserPlus,
-} from "lucide-react";
-import { api } from "@/lib/client";
-import { subscribeLive } from "@/lib/liveStream";
-import type { NotificationEvent } from "@/lib/scanBus";
+import Link from "next/link";
+import { useState } from "react";
+import { ArrowRight, Bell, CheckCheck, Info, ShieldAlert, UserCheck, UserPlus } from "lucide-react";
+import { useNotifications, useMarkNotificationsRead } from "@/hooks/admin/dashboard";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import type { AdminNotification } from "@/types/admin";
 
-type Item = {
-  id: string;
-  kind: NotificationEvent["kind"];
-  severity: NotificationEvent["severity"];
-  title: string;
-  body: string;
-  read: boolean;
-  at: string;
-};
-
-type Feed = { notifications: Item[]; unread: number };
-
-const FEED_KEY = ["admin-notifications"];
-
-const KIND_ICON: Record<Item["kind"], { icon: typeof Bell; className: string }> = {
-  CHECK_IN: { icon: UserCheck, className: "bg-green/15 text-green" },
-  SCAN_ALERT: { icon: ShieldAlert, className: "bg-terracotta/15 text-terracotta" },
-  GUEST_ADDED: { icon: UserPlus, className: "bg-tan/15 text-tan" },
-  SYSTEM: { icon: Info, className: "bg-panel-2 text-cream-dim" },
+const KIND_ICON: Record<AdminNotification["kind"], { icon: typeof Bell; className: string }> = {
+  CHECK_IN: { icon: UserCheck, className: "bg-emerald-500/10 text-emerald-400" },
+  SCAN_ALERT: { icon: ShieldAlert, className: "bg-amber-500/10 text-amber-400" },
+  GUEST_ADDED: { icon: UserPlus, className: "bg-secondary text-green" },
+  SYSTEM: { icon: Info, className: "bg-muted text-muted-foreground" },
 };
 
 function timeAgo(iso: string) {
@@ -55,114 +25,45 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationBell() {
-  const queryClient = useQueryClient();
-  const { data } = useQuery({
-    queryKey: FEED_KEY,
-    queryFn: () => api<Feed>("/api/admin/notifications", { role: "admin" }),
-    staleTime: 30_000,
-    refetchInterval: 120_000,
-  });
-
-  /* live: new notifications land in the cache instantly + raise a toast */
-  useEffect(() => {
-    return subscribeLive("admin", {
-      onNotification: (event) => {
-        queryClient.setQueryData<Feed>(FEED_KEY, (old) => {
-          if (!old) return old;
-          if (old.notifications.some((n) => n.id === event.id)) return old;
-          return {
-            unread: old.unread + 1,
-            notifications: [
-              { ...event, read: false },
-              ...old.notifications,
-            ].slice(0, 50),
-          };
-        });
-        const show =
-          event.severity === "error"
-            ? toast.error
-            : event.severity === "warning"
-              ? toast.warning
-              : event.severity === "success"
-                ? toast.success
-                : toast.info;
-        show(event.title, { description: event.body || undefined });
-      },
-    });
-  }, [queryClient]);
-
+  const [open, setOpen] = useState(false);
+  const { data, isPending, error, refetch } = useNotifications();
+  const markRead = useMarkNotificationsRead();
   const unread = data?.unread ?? 0;
-
-  const markAllRead = async () => {
-    queryClient.setQueryData<Feed>(FEED_KEY, (old) =>
-      old ? { unread: 0, notifications: old.notifications.map((n) => ({ ...n, read: true })) } : old
-    );
-    try {
-      await api("/api/admin/notifications", { method: "PATCH", role: "admin", body: {} });
-    } catch {
-      queryClient.invalidateQueries({ queryKey: FEED_KEY });
-    }
-  };
+  const items = data?.notifications.slice(0, 5) ?? [];
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-          <Bell className="size-5" />
-          {unread > 0 && (
-            <Badge className="absolute -right-1 -top-1 h-4 min-w-4 rounded-full bg-terracotta px-1 text-[10px] font-bold text-white">
-              {unread > 99 ? "99+" : unread}
-            </Badge>
-          )}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications, ${unread} unread`}>
+          <Bell aria-hidden="true" className="size-5" />
+          {unread > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">{unread > 99 ? "99+" : unread}</span>}
         </Button>
-      </DialogTrigger>
-      <DialogContent className="w-[26rem] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-2xl p-0">
-        <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-line px-4 py-3">
-          <DialogTitle className="label text-xs font-bold text-orange">Notifications</DialogTitle>
-          {unread > 0 && (
-            <Button variant="ghost" size="xs" onClick={markAllRead} className="gap-1 text-cream-dim">
-              <CheckCheck className="size-3.5" /> Mark all read
-            </Button>
-          )}
-        </DialogHeader>
-        <div className="max-h-[70vh] overflow-y-auto">
-          {!data || data.notifications.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-cream-dim">
-              Nothing yet — gate activity and guest tickets show up here.
-            </p>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="end" sideOffset={10} className="notification-dropdown" aria-label="Recent notifications">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+          <div><h2 className="font-semibold">Notifications</h2><p className="mt-1 text-xs text-muted-foreground">{unread} unread · Latest activity</p></div>
+          {unread > 0 && <Button variant="ghost" size="sm" disabled={markRead.isPending} onClick={() => markRead.mutate(undefined)}><CheckCheck aria-hidden="true" className="size-4" /><span className="sr-only sm:not-sr-only">Mark all read</span></Button>}
+        </div>
+        <div className="max-h-[min(26rem,60dvh)] overflow-y-auto">
+          {isPending ? <p className="p-6 text-center text-sm text-muted-foreground" role="status">Loading notifications…</p> : error ? (
+            <div className="space-y-3 p-5 text-center"><p className="text-sm text-muted-foreground">Couldn’t load notifications.</p><Button variant="outline" size="sm" onClick={() => refetch()}>Try again</Button></div>
+          ) : items.length === 0 ? (
+            <div className="space-y-2 p-8 text-center"><Bell aria-hidden="true" className="mx-auto size-6 text-muted-foreground" /><p className="text-sm font-medium">You’re all caught up</p><p className="text-xs text-muted-foreground">Check-ins, guest activity and alerts appear here.</p></div>
           ) : (
-            <ul>
-              {data.notifications.map((n) => {
+            <ul className="divide-y divide-border">
+              {items.map((n) => {
                 const { icon: Icon, className } = KIND_ICON[n.kind] ?? KIND_ICON.SYSTEM;
-                return (
-                  <li
-                    key={n.id}
-                    className={cn(
-                      "flex gap-3 border-b border-line/50 px-4 py-3 last:border-b-0",
-                      !n.read && "bg-panel-2/60"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-                        className
-                      )}
-                    >
-                      <Icon className="size-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-cream">{n.title}</p>
-                      {n.body && <p className="mt-0.5 text-xs text-cream-dim">{n.body}</p>}
-                      <p className="mt-1 text-[11px] text-cream-dim/70">{timeAgo(n.at)}</p>
-                    </div>
-                    {!n.read && <span className="mt-2 size-2 shrink-0 rounded-full bg-orange" />}
-                  </li>
-                );
+                return <li key={n.id} className={cn("flex gap-3 p-4", !n.read && "bg-primary/5")}>
+                  <span className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl", className)}><Icon aria-hidden="true" className="size-4" /></span>
+                  <div className="min-w-0 flex-1"><p className="text-sm font-medium">{n.title}</p>{n.body && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{n.body}</p>}<time dateTime={n.at} className="mt-1.5 block text-[11px] text-muted-foreground">{timeAgo(n.at)}</time></div>
+                  {!n.read && <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
+                </li>;
               })}
             </ul>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+        <div className="border-t border-border p-3"><Button variant="ghost" className="w-full" asChild><Link href="/admin/notifications" onClick={() => setOpen(false)}>View more<ArrowRight aria-hidden="true" className="size-4" /></Link></Button></div>
+      </PopoverContent>
+    </Popover>
   );
 }

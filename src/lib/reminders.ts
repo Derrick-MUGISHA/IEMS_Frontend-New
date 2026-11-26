@@ -40,11 +40,12 @@ function nextStep(
    unfinished step — verify email, finish profile, or invite a plus-one — with a
    single-use sign-in link that works for all three. Safe to call from the Vercel
    cron endpoint or the admin "run now" action; idempotent within a 20h window. */
-export async function runDailyReminders(): Promise<ReminderSummary> {
+export async function runDailyReminders(eventId?: string): Promise<ReminderSummary> {
   await dbConnect();
   const now = new Date();
 
   const events = await Event.find({
+    ...(eventId ? { _id: eventId } : {}),
     startTime: { $gt: now },
     archivedAt: null,
     status: "OPEN",

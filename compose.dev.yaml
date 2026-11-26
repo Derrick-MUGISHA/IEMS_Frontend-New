@@ -1,0 +1,24 @@
+name: iems-dev
+services:
+  app:
+    image: iems:development
+    build:
+      context: .
+      target: development
+    env_file:
+      - ${IEMS_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+    ports:
+      - "${IEMS_DEV_PORT:-3003}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - next-cache:/app/.next
+    init: true
+    command: ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0"]
+volumes:
+  next-cache:

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { dbConnect } from "@/lib/db";
-import { Event, EVENT_CATEGORIES, EVENT_TYPES } from "@/models";
+import { Event, EVENT_CATEGORIES, EVENT_TYPES, EVENT_STATUSES } from "@/models";
 import { requireAdmin } from "@/lib/auth";
 import { publishContentChange } from "@/lib/scanBus";
 import { ok, fail, unauthorized } from "@/lib/http";
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
       gallery: e.gallery,
       organiser: e.organiser,
       maxAttendees: e.maxAttendees,
+      registeredCount: e.registeredCount,
       details: e.details,
       rules: e.rules,
       status: e.status,
@@ -51,7 +52,8 @@ const Body = z.object({
   price: z.string().default("Free"),
   location: z.string().default(""),
   isPublished: z.boolean().default(false),
-});
+  status: z.enum(EVENT_STATUSES).default("DRAFT"),
+}).refine((value) => !value.endTime || value.endTime > value.startTime, { message: "End time must be after start time", path: ["endTime"] });
 
 export async function POST(req: Request) {
   const admin = await requireAdmin(req);

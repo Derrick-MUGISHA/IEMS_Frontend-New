@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Provider as ReduxProvider } from "react-redux";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, defaultShouldDehydrateQuery } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { get, set, del, createStore, type UseStore } from "idb-keyval";
@@ -14,7 +14,7 @@ import { EventFlowProvider } from "@/components/EventFlow";
 const ONE_DAY = 1000 * 60 * 60 * 24;
 /* bump when a persisted query's response shape changes, so stale caches from
    an older build are discarded on load instead of crashing the UI */
-const CACHE_VERSION = "2026-07-16-health";
+const CACHE_VERSION = "2026-11-17-plain-qr";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   /* one store per client instance, preloaded from localStorage on the client */
@@ -57,7 +57,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <ReduxProvider store={store}>
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ persister, maxAge: ONE_DAY, buster: CACHE_VERSION }}
+        persistOptions={{ persister, maxAge: ONE_DAY, buster: CACHE_VERSION, dehydrateOptions: { shouldDehydrateQuery: (query) => query.meta?.persist !== false && defaultShouldDehydrateQuery(query) } }}
       >
         <AuthProvider>
           <EventFlowProvider>{children}</EventFlowProvider>

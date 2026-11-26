@@ -17,6 +17,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   await dbConnect();
   const ticket = await Ticket.findById(id);
   if (!ticket) return notFound("Ticket");
+  if (ticket.status !== "VALID") return fail("Only an unused, valid ticket can be reset", 409);
 
   const done = await resetTicket(ticket);
   if (!done) return fail("This ticket has no active holder to reset", 409);

@@ -1,7 +1,7 @@
 import { dbConnect } from "@/lib/db";
 import { Event } from "@/models";
 import { requireAdmin } from "@/lib/auth";
-import { uploadImage } from "@/lib/cloudinary";
+import { uploadImage, InvalidImageError, ImageUploadError } from "@/lib/cloudinary";
 import { publishContentChange } from "@/lib/scanBus";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
@@ -23,7 +23,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!event) return notFound("Event");
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const url = await uploadImage(buffer, "events");
+  let url: string;
+  try { url = await uploadImage(buffer, "events"); }
+  catch (err) {
+    if (err instanceof InvalidImageError) return fail(err.message);
+    if (err instanceof ImageUploadError) return fail(err.message, err.status);
+    throw err;
+  }
   /* the event gallery holds every uploaded image; newest first */
   event.gallery = [url, ...event.gallery];
   await event.save();

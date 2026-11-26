@@ -1,180 +1,35 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronsUpDown, Ticket as TicketIcon } from "lucide-react";
+import { Ticket, Users, UserRound, Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { useParticipants } from "@/hooks/admin/participants";
 import { useGuests } from "@/hooks/admin/guests";
 import { useGenerateTicket } from "@/hooks/admin/tickets";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { SearchSelect, type Choice } from "@/components/admin/SearchSelect";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-
-type Option = { id: string; label: string; sub: string };
-
-function HolderCombobox({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: Option[];
-  value: string;
-  onChange: (id: string) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.id === value);
-  return (
-    <>
-      <Button
-        variant="outline"
-        role="combobox"
-        aria-expanded={open}
-        className="w-full justify-between font-normal"
-        onClick={() => setOpen(true)}
-      >
-        {selected ? (
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate">{selected.label}</span>
-            <span className="truncate text-xs text-muted-foreground">{selected.sub}</span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground">{placeholder}</span>
-        )}
-        <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-      </Button>
-      <CommandDialog
-        open={open}
-        onOpenChange={setOpen}
-        title={placeholder}
-        description="Search by name, email or event"
-        className="top-1/2 left-1/2 -translate-y-1/2 border border-white/10 bg-neutral-950 text-neutral-50 ring-0 shadow-2xl sm:max-w-2xl"
-      >
-        <Command className="bg-neutral-950 text-neutral-50">
-          <CommandInput placeholder="Search by name, email or event…" />
-          <CommandList className="max-h-80">
-            <CommandEmpty className="py-6 text-center text-sm text-neutral-400">
-              No matches.
-            </CommandEmpty>
-            <CommandGroup>
-              {options.map((o) => (
-                <CommandItem
-                  key={o.id}
-                  value={`${o.label} ${o.sub}`}
-                  className="data-selected:bg-white/10 data-selected:text-white"
-                  onSelect={() => {
-                    onChange(o.id);
-                    setOpen(false);
-                  }}
-                >
-                  <Check className={cn("size-4", value === o.id ? "opacity-100" : "opacity-0")} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-neutral-50">{o.label}</span>
-                    <span className="truncate text-xs text-neutral-400">{o.sub}</span>
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </CommandDialog>
-    </>
-  );
-}
-
+import { ErrorState } from "@/components/admin/states";
 export default function GenerateTicketPage() {
-  const router = useRouter();
-  const generate = useGenerateTicket();
-  const participants = useParticipants();
-  const guests = useGuests();
-  const [participantId, setParticipantId] = useState("");
-  const [guestId, setGuestId] = useState("");
-
-  const pOptions: Option[] = (participants.data ?? [])
-    .filter((p) => p.registrationStatus)
-    .map((p) => ({ id: p.id, label: p.name, sub: `${p.email} · ${p.event?.name ?? ""}` }));
-  const gOptions: Option[] = (guests.data ?? []).map((g) => ({
-    id: g.id,
-    label: g.name,
-    sub: `${g.email} · ${g.eventName ?? ""}`,
-  }));
-
+  const router = useRouter(); const generate = useGenerateTicket();
+  const participants = useParticipants(); const guests = useGuests();
+  const [participantId, setParticipantId] = useState(""); const [guestId, setGuestId] = useState("");
+  const pOptions: Choice[] = (participants.data ?? []).filter((p) => p.registrationStatus && p.registrationStatus !== "REJECTED").map((p) => ({ value: p.id, label: p.name, description: `${p.email.toLowerCase()} · ${p.event?.name ?? ""}${p.ticket ? " · Ticket already issued" : ""}` }));
+  const gOptions: Choice[] = (guests.data ?? []).map((g) => ({ value: g.id, label: g.name, description: `${g.email.toLowerCase()} · ${g.eventName ?? ""}${g.ticket ? " · Ticket already issued" : ""}` }));
   async function submit(kind: "participant" | "guest") {
-    const body = kind === "participant" ? { participantId } : { guestId };
-    await generate.mutateAsync(body);
-    router.push("/admin/tickets");
+    try { const result = await generate.mutateAsync(kind === "participant" ? { participantId } : { guestId }); router.push(`/admin/tickets/${result.ticket.id}`); } catch { /* Mutation errors keep the current selection for retry. */ }
   }
-
-  return (
-    <div className="mx-auto w-full max-w-xl">
-      <PageHeader
-        title="Generate ticket"
-        description="Issue a pass for a participant or guest the QR is emailed to them."
-        crumbs={[{ label: "Tickets", href: "/admin/tickets" }, { label: "Generate" }]}
-      />
-      <Card className="shadow-none">
-        <CardContent className="pt-6">
-          <Tabs defaultValue="participant">
-            <TabsList className="mb-5 grid w-full grid-cols-2">
-              <TabsTrigger value="participant">Participant</TabsTrigger>
-              <TabsTrigger value="guest">Guest</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="participant" className="space-y-4">
-              <div className="space-y-2">
-                <Label>Participant</Label>
-                <HolderCombobox
-                  options={pOptions}
-                  value={participantId}
-                  onChange={setParticipantId}
-                  placeholder="Choose a participant"
-                />
-              </div>
-              <Button
-                className="w-full"
-                disabled={!participantId || generate.isPending}
-                onClick={() => submit("participant")}
-              >
-                <TicketIcon className="size-4" />
-                {generate.isPending ? "Generating…" : "Generate ticket"}
-              </Button>
-            </TabsContent>
-
-            <TabsContent value="guest" className="space-y-4">
-              <div className="space-y-2">
-                <Label>Guest</Label>
-                <HolderCombobox
-                  options={gOptions}
-                  value={guestId}
-                  onChange={setGuestId}
-                  placeholder="Choose a guest"
-                />
-              </div>
-              <Button
-                className="w-full"
-                disabled={!guestId || generate.isPending}
-                onClick={() => submit("guest")}
-              >
-                <TicketIcon className="size-4" />
-                {generate.isPending ? "Generating…" : "Generate ticket"}
-              </Button>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <div className="space-y-6"><PageHeader title="Generate ticket" description="Choose a registered participant or guest. Their PDF ticket is generated and emailed." crumbs={[{ label: "Tickets", href: "/admin/tickets" }, { label: "Generate" }]} actions={<Button variant="outline" onClick={() => router.push("/admin/tickets")}><ArrowLeft className="size-4" />Back to tickets</Button>} />
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="size-5" />Ticket recipient</CardTitle><CardDescription>Search by name, email or event.</CardDescription></CardHeader><CardContent>
+      <Tabs defaultValue="participant" className="ticket-recipient-tabs"><TabsList className="mb-6 grid h-12 w-full grid-cols-2"><TabsTrigger value="participant" className="h-10 gap-2"><Users className="size-4" />Participant</TabsTrigger><TabsTrigger value="guest" className="h-10 gap-2"><UserRound className="size-4" />Guest</TabsTrigger></TabsList>
+        {(["participant", "guest"] as const).map((kind) => { const query = kind === "participant" ? participants : guests; const value = kind === "participant" ? participantId : guestId; return <TabsContent key={kind} value={kind} className="space-y-5">
+          {query.error ? <ErrorState message={query.error.message} onRetry={() => query.refetch()} /> : <>
+            <SearchSelect options={kind === "participant" ? pOptions : gOptions} value={value} onChange={kind === "participant" ? setParticipantId : setGuestId} label={kind === "participant" ? "Participant" : "Guest"} placeholder={query.isPending ? "Loading recipients…" : `Choose a ${kind}`} disabled={generate.isPending || query.isPending} className="w-full" />
+            <div className="flex justify-end border-t border-border pt-5"><Button disabled={!value || generate.isPending} onClick={() => submit(kind)}>{generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Ticket className="size-4" />}{generate.isPending ? "Generating…" : "Generate and email ticket"}</Button></div>
+          </>}
+        </TabsContent>; })}
+      </Tabs>
+    </CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Mail className="size-4" />What happens next</CardTitle></CardHeader><CardContent className="space-y-3 text-sm text-muted-foreground"><p>One PDF ticket is created with the event artwork and a signed entry QR.</p><p>The recipient receives it by email. You’ll open the ticket’s management page to review it.</p><p>If a ticket already exists, its existing record is returned.</p></CardContent></Card></div>
+  </div>;
 }

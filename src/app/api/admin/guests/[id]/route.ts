@@ -3,7 +3,7 @@ import { z } from "zod";
 import { dbConnect } from "@/lib/db";
 import { Event, Guest, Participant, ScanLog, Ticket, GUEST_TYPES } from "@/models";
 import { requireAdmin } from "@/lib/auth";
-import { ticketQrDataUrl } from "@/lib/qr";
+import { canonicalTicketQrUrl } from "@/lib/qr";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
 /* Admin: full profile of a single guest — identity, ticket + QR, who invited
@@ -47,7 +47,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       profile: g.profile ?? null,
       guestType: g.guestType,
       registeredAt: g.createdAt,
-      event: event ? { id: event._id, name: event.name, startTime: event.startTime } : null,
+      event: event ? { id: event._id, name: event.name, startTime: event.startTime, endTime: event.endTime, gallery: event.gallery, location: event.location, organiser: event.organiser, details: event.details, price: event.price } : null,
       inviter: inviter ? { id: inviter._id, name: inviter.name, email: inviter.email } : null,
     },
     ticket: ticket
@@ -57,11 +57,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
           status: ticket.status,
           sentAt: ticket.sentAt ?? null,
           scannedAt: ticket.scannedAt ?? null,
-          qrDataUrl: await ticketQrDataUrl(ticket.code, {
-            name: g.name,
-            type: g.guestType,
-            eventName: event?.name,
-          }),
+          qrDataUrl: await canonicalTicketQrUrl(ticket),
         }
       : null,
     attendance: {
@@ -98,7 +94,7 @@ async function snapshotGuest(ticket: InstanceType<typeof Ticket>) {
       profile: holder.photoUrl ?? null,
       guestType: holder.label ?? "GENERAL",
       registeredAt: ticket.issuedAt,
-      event: event ? { id: event._id, name: event.name, startTime: event.startTime } : null,
+      event: event ? { id: event._id, name: event.name, startTime: event.startTime, endTime: event.endTime, gallery: event.gallery, location: event.location, organiser: event.organiser, details: event.details, price: event.price } : null,
       inviter: null,
     },
     ticket: {
@@ -107,11 +103,7 @@ async function snapshotGuest(ticket: InstanceType<typeof Ticket>) {
       status: ticket.status,
       sentAt: ticket.sentAt ?? null,
       scannedAt: ticket.scannedAt ?? null,
-      qrDataUrl: await ticketQrDataUrl(ticket.code, {
-        name: holder.name,
-        type: holder.label ?? "GENERAL",
-        eventName: event?.name,
-      }),
+      qrDataUrl: await canonicalTicketQrUrl(ticket),
     },
     attendance: {
       checkInTime: ticket.scannedAt ?? null,

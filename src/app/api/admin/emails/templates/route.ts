@@ -1,4 +1,5 @@
 import {
+  emailSender,
   renderMagicLinkEmail,
   renderPlusOneInviteEmail,
   renderRegistrationConfirmation,
@@ -10,7 +11,6 @@ import {
   renderTicketNudgeEmail,
 } from "@/lib/mailer";
 import { GUEST_TYPES } from "@/models/Guest";
-import { ticketQrDataUrl } from "@/lib/qr";
 import { appUrl } from "@/lib/appUrl";
 import { requireAdmin } from "@/lib/auth";
 import { ok, unauthorized } from "@/lib/http";
@@ -26,12 +26,6 @@ export async function GET(req: Request) {
     eventName: "SheCanCODE Demo Day",
     url: appUrl("/verify/sample-token"),
   };
-
-  const qr = await ticketQrDataUrl("SAMPLE-CODE", {
-    name: sample.name,
-    type: "PARTICIPANT",
-    eventName: sample.eventName,
-  });
 
   const in30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -62,8 +56,7 @@ export async function GET(req: Request) {
         ticketUrl: appUrl("/ticket/sample-code"),
         validUntil: in30,
         hasPdf: true,
-      },
-      qr
+      }
     ),
   }));
 
@@ -117,8 +110,7 @@ export async function GET(req: Request) {
           ticketUrl: appUrl("/ticket/sample-code"),
           validUntil: in30,
           hasPdf: true,
-        },
-        qr
+        }
       ),
     },
     ...guestPassVariants,
@@ -189,5 +181,5 @@ export async function GET(req: Request) {
     },
   ];
 
-  return ok({ templates });
+  return ok({ templates: templates.map((template) => ({ ...template, from: emailSender() })) });
 }

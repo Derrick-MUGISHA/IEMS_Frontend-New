@@ -1,0 +1,22 @@
+name: iems
+services:
+  app:
+    image: iems:production
+    build:
+      context: .
+      target: production
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://events.igirerwanda.org}
+    env_file:
+      - ${IEMS_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "${IEMS_PORT:-3002}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
