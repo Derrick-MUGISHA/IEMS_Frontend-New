@@ -16,6 +16,8 @@ import {
   Ticket as TicketIcon,
   Trash2,
   UserCheck,
+  UserPlus,
+  RotateCw,
   Users,
 } from "lucide-react";
 import {
@@ -24,6 +26,7 @@ import {
   useUpdateEvent,
   useSendReminders,
   useEventEngagement,
+  useRetryFailedEmails,
 } from "@/hooks/admin/events";
 import { useEventStats } from "@/hooks/admin/dashboard";
 import type { EmailKind, EventEngagement } from "@/types/admin";
@@ -135,6 +138,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   label="Capacity"
                   value={capacity === 0 ? "Uncapped" : `${issued} / ${capacity}`}
                 />
+                <Detail
+                  icon={UserPlus}
+                  label="Plus-one places"
+                  value={
+                    !event.plusOneLimit
+                      ? `Unlimited (${event.plusOneSlotsTaken ?? 0} claimed)`
+                      : (event.plusOneSlotsTaken ?? 0) >= event.plusOneLimit
+                        ? `Full: ${event.plusOneLimit} / ${event.plusOneLimit}`
+                        : `${event.plusOneSlotsTaken ?? 0} / ${event.plusOneLimit} claimed`
+                  }
+                />
               </dl>
               {event.details && (
                 <div className="border-t border-border pt-4">
@@ -156,7 +170,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </CardContent>
           </Card>
 
-          <EngagementCard data={engagement.data} loading={engagement.isPending} />
+          <EngagementCard eventId={id} data={engagement.data} loading={engagement.isPending} />
 
           <Card className="shadow-none"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><TicketIcon className="size-4" />Ticket design</CardTitle></CardHeader><CardContent>
             <TicketArtwork ticket={{ name: "Attendee name", eventName: event.name, date: event.startTime, venue: event.location, images: event.gallery, organiser: event.organiser, subtitle: event.details, price: event.price }} />
@@ -211,9 +225,18 @@ const EMAIL_KIND_LABEL: Record<EmailKind, string> = {
 
 /* per-event engagement: who still needs a nudge, the plus-one split, and which
    emails have actually reached this event's people */
-function EngagementCard({ data, loading }: { data?: EventEngagement; loading: boolean }) {
+function EngagementCard({
+  eventId,
+  data,
+  loading,
+}: {
+  eventId: string;
+  data?: EventEngagement;
+  loading: boolean;
+}) {
+  const retry = useRetryFailedEmails();
   const sentKinds = data
-    ? (Object.entries(data.emails.byKind) as [EmailKind, { sent: number; failed: number }][])
+    ? (Object.entries(data.emails.byKind) as [EmailKind, EventEngagement["emails"]["byKind"][EmailKind]][])
         .filter(([, v]) => v.sent > 0 || v.failed > 0)
         .sort((a, b) => b[1].sent - a[1].sent)
     : [];
@@ -270,7 +293,23 @@ function EngagementCard({ data, loading }: { data?: EventEngagement; loading: bo
                   <span className="font-medium">{EMAIL_KIND_LABEL[kind]}</span>
                   <span className="flex items-center gap-2 tabular-nums text-muted-foreground">
                     <span className="text-emerald-400">{v.sent} sent</span>
-                    {v.failed > 0 && <span className="text-red-400">{v.failed} failed</span>}
+                    {v.stillFailing > 0 ? (
+                      <span className="text-red-400">{v.stillFailing} still failing</span>
+                    ) : (
+                      v.failed > 0 && <span>{v.failed} failed, since resolved</span>
+                    )}
+                    {v.stillFailing > 0 && v.retryable && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={retry.isPending}
+                        onClick={() => retry.mutate({ id: eventId, kind })}
+                      >
+                        <RotateCw className={retry.isPending && retry.variables?.kind === kind ? "size-3 animate-spin" : "size-3"} />
+                        Retry {v.stillFailing}
+                      </Button>
+                    )}
                   </span>
                 </div>
               ))}

@@ -77,6 +77,17 @@ export default function EventsPage() {
       cell: (e) => <div className="min-w-28 space-y-1.5"><p className="text-sm tabular-nums">{e.registeredCount ?? 0} <span className="text-muted-foreground">/ {e.maxAttendees || "Unlimited"}</span></p>{e.maxAttendees > 0 && <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, ((e.registeredCount ?? 0) / e.maxAttendees) * 100)}%` }} /></div>}</div>,
     },
     {
+      id: "plusOnes",
+      header: "Plus-ones",
+      sortValue: (e) => e.plusOneSlotsTaken ?? 0,
+      cell: (e) => {
+        const taken = e.plusOneSlotsTaken ?? 0;
+        if (!e.plusOneLimit) return <span className="text-sm tabular-nums text-muted-foreground">{taken} / Unlimited</span>;
+        if (taken >= e.plusOneLimit) return <Badge variant="outline" className="rounded-full border-amber-500/40 text-amber-600">Full · {e.plusOneLimit}/{e.plusOneLimit}</Badge>;
+        return <span className="text-sm tabular-nums">{taken} <span className="text-muted-foreground">/ {e.plusOneLimit}</span></span>;
+      },
+    },
+    {
       id: "status",
       header: "Status",
       cell: (e) => (

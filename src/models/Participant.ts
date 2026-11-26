@@ -41,6 +41,9 @@ export interface ParticipantDoc {
   registrationStatus: RegistrationStatus;
   /** 10. plus one id — the guest this participant invited (one per participant) */
   plusOne?: Types.ObjectId | null;
+  /** whether this participant holds one of the event's limited plus-one places.
+      null = not decided yet (decided when they accept their invitation). */
+  plusOneAllowed?: boolean | null;
   /** 11. ticket id */
   ticket?: Types.ObjectId | null;
   createdAt: Date;
@@ -59,6 +62,7 @@ const ParticipantSchema = new Schema<ParticipantDoc>(
     status: { type: String, enum: PARTICIPANT_STATUSES, default: "PENDING" },
     registrationStatus: { type: String, enum: REGISTRATION_STATUSES, default: "APPROVED" },
     plusOne: { type: Schema.Types.ObjectId, ref: "Guest", default: null },
+    plusOneAllowed: { type: Boolean, default: null },
     ticket: { type: Schema.Types.ObjectId, ref: "Ticket", default: null },
   },
   { timestamps: true }

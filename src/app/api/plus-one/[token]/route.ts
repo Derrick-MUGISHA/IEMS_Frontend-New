@@ -3,6 +3,7 @@ import { z } from "zod";
 import { dbConnect } from "@/lib/db";
 import { Event, Guest, Participant, VerificationToken } from "@/models";
 import { issueTicket, CapacityError } from "@/lib/tickets";
+import { claimPlusOneSlot, PLUS_ONE_FULL_GUEST_MESSAGE } from "@/lib/plusOneSlots";
 import { ok, fail } from "@/lib/http";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -26,6 +27,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const participant = await Participant.findById(invite.participant);
   const event = participant && (await Event.findById(participant.event));
   if (!participant || !event) return fail("This invite link is invalid or has expired", 404);
+  if (!(await claimPlusOneSlot(participant))) return fail(PLUS_ONE_FULL_GUEST_MESSAGE, 403);
   if (await Guest.findOne({ inviter: participant._id })) {
     return fail("This participant already has a plus-one", 409);
   }
@@ -55,6 +57,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const participant = await Participant.findById(invite.participant);
   const event = participant && (await Event.findOne({ _id: participant.event, status: "OPEN" }));
   if (!participant || !event) return fail("Registration for this event is closed", 409);
+  if (!(await claimPlusOneSlot(participant))) return fail(PLUS_ONE_FULL_GUEST_MESSAGE, 403);
 
   /* an invite addressed to a specific person is locked to that address —
      whatever the form submits, the guest record gets the invited email */

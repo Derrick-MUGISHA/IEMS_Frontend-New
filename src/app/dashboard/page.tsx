@@ -36,6 +36,7 @@ type Me = {
     roleLine: string;
     cohort?: string | null;
     photoUrl: string | null;
+    photoPending?: boolean;
     status: string;
   };
   event: {
@@ -53,7 +54,20 @@ type Me = {
     relationship: Relationship | null;
     status: string;
   } | null;
+  plusOneAllowed?: boolean;
+  plusOnePlaces?: { limit: number; taken: number; remaining: number | null; full: boolean } | null;
 };
+
+type Stack = "FRONTEND" | "BACKEND" | "FULLSTACK" | "MOBILE" | "DATA" | "OTHER";
+
+const STACK_OPTIONS: [Stack, string][] = [
+  ["FRONTEND", "Frontend"],
+  ["BACKEND", "Backend"],
+  ["FULLSTACK", "Full-stack"],
+  ["MOBILE", "Mobile"],
+  ["DATA", "Data"],
+  ["OTHER", "Other"],
+];
 
 const GENDER_OPTIONS: [Gender, string][] = [
   ["FEMALE", "Female"],
@@ -96,6 +110,7 @@ export default function DashboardPage() {
     queryFn: () => api<Me>("/api/me", { role: "participant" }),
     enabled: isAuthenticated && !!participantId,
     staleTime: 30_000,
+    refetchInterval: (query) => (query.state.data?.attendee.photoPending ? 3000 : false),
     meta: { persist: false },
   });
   /* set the moment a pass is generated, so the celebration only fires once */
@@ -136,6 +151,11 @@ export default function DashboardPage() {
           </motion.div>
           {me.attendee.type === "PARTICIPANT" && (
             <motion.div {...cardMotion(1)}>
+              <MissingDetailsCard me={me} onSaved={load} />
+            </motion.div>
+          )}
+          {me.attendee.type === "PARTICIPANT" && (
+            <motion.div {...cardMotion(2)}>
               <PlusOneCard me={me} onChanged={load} />
             </motion.div>
           )}
@@ -171,6 +191,104 @@ export default function DashboardPage() {
   );
 }
 
+/* After the pass is issued, asks only for the details still missing from the
+   registration (an admin may have left them blank); hidden once complete. */
+function MissingDetailsCard({ me, onSaved }: { me: Me; onSaved: () => void }) {
+  const { attendee } = me;
+  const phoneMissing = !attendee.phone;
+  const genderMissing = !attendee.gender;
+  const stackMissing = !attendee.cohort;
+  const photoMissing = !attendee.photoUrl && !attendee.photoPending;
+  const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<Gender | "">("");
+  const [stack, setStack] = useState<Stack | "">("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  if (attendee.photoPending) {
+    return (
+      <Panel>
+        <p className="text-sm text-cream-dim">
+          Your pass is ready. We&apos;re saving your photo and emailing your ticket. This takes a moment.
+        </p>
+      </Panel>
+    );
+  }
+  if (!phoneMissing && !genderMissing && !stackMissing && !photoMissing) return null;
+
+  const profile: Record<string, string> = {};
+  if (phoneMissing && phone) profile.phone = phone;
+  if (genderMissing && gender) profile.gender = gender;
+  if (stackMissing && stack) profile.stack = stack;
+  const nothingToSave = Object.keys(profile).length === 0 && !photo;
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (nothingToSave) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (photo) {
+        const form = new FormData();
+        form.append("photo", photo);
+        for (const [key, value] of Object.entries(profile)) form.append(key, value);
+        await api("/api/me/photo", { role: "participant", form });
+      } else {
+        await api("/api/me", { method: "PATCH", role: "participant", body: profile });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel>
+      <h2 className="label mb-2 text-sm font-bold text-orange">Complete your details</h2>
+      <p className="mb-4 text-sm text-cream-dim">
+        A few details are missing from your registration. Add whichever you have.
+      </p>
+      <form onSubmit={save} className="space-y-4">
+        {phoneMissing && (
+          <Field
+            label="Phone number"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. 0788 000 000"
+          />
+        )}
+        {genderMissing && (
+          <Select label="Gender" value={gender} onValueChange={setGender} options={GENDER_OPTIONS} />
+        )}
+        {stackMissing && (
+          <Select label="Your track" value={stack} onValueChange={setStack} options={STACK_OPTIONS} />
+        )}
+        {photoMissing && (
+          <label className="block text-left">
+            <span className="label mb-1.5 block text-xs font-semibold text-cream-dim">
+              A clear photo of yourself
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-cream-dim file:mr-3 file:rounded-md file:border-0 file:bg-panel-2 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-cream"
+            />
+          </label>
+        )}
+        {error && <p className="text-sm text-terracotta">{error}</p>}
+        <Button type="submit" disabled={busy || nothingToSave}>
+          {busy ? "Saving…" : "Save details"}
+        </Button>
+      </form>
+    </Panel>
+  );
+}
+
 /* One step to the pass: the visitor fills in whatever personal details are
    still missing, then adds a photo — the pass is issued once both are done */
 function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
@@ -179,11 +297,13 @@ function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
     !attendee.fullName || attendee.fullName.startsWith("Guest of ");
   const phoneMissing = !attendee.phone;
   const genderMissing = !attendee.gender;
-  const hasMissing = nameMissing || phoneMissing || genderMissing;
+  const stackMissing = attendee.type === "PARTICIPANT" && !attendee.cohort;
+  const hasMissing = nameMissing || phoneMissing || genderMissing || stackMissing;
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
+  const [stack, setStack] = useState<Stack | "">("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -201,7 +321,8 @@ function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
   const detailsIncomplete =
     (nameMissing && !fullName) ||
     (phoneMissing && !phone) ||
-    (genderMissing && !gender);
+    (genderMissing && !gender) ||
+    (stackMissing && !stack);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,18 +330,14 @@ function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
     setBusy(true);
     setError("");
     try {
-      /* patch in the missing details before the ticket is issued */
-      const profile: Record<string, string> = {};
-      if (nameMissing && fullName) profile.name = fullName;
-      if (phoneMissing && phone) profile.phone = phone;
-      if (genderMissing && gender) profile.gender = gender;
-      if (Object.keys(profile).length > 0) {
-        await api("/api/me", { method: "PATCH", role: "participant", body: profile });
-      }
-      /* participants must add a real photo of themselves (anonymous avatars are
-         only for plus-ones / guests), so the uploaded file is the profile pic */
+      /* one request: the missing details travel with the photo, and the pass
+         is issued before the photo finishes uploading in the background */
       const form = new FormData();
       form.append("photo", file as File);
+      if (nameMissing && fullName) form.append("name", fullName);
+      if (phoneMissing && phone) form.append("phone", phone);
+      if (genderMissing && gender) form.append("gender", gender);
+      if (stackMissing && stack) form.append("stack", stack);
       await api("/api/me/photo", { role: "participant", form });
       onDone();
     } catch (err) {
@@ -262,17 +379,18 @@ function CompleteCard({ me, onDone }: { me: Me; onDone: () => void }) {
             label="Gender"
             required
             value={gender}
-            onChange={(e) => setGender(e.target.value as Gender)}
-          >
-            <option value="" disabled>
-              Select…
-            </option>
-            {GENDER_OPTIONS.map(([value, text]) => (
-              <option key={value} value={value}>
-                {text}
-              </option>
-            ))}
-          </Select>
+            onValueChange={setGender}
+            options={GENDER_OPTIONS}
+          />
+        )}
+        {stackMissing && (
+          <Select
+            label="Your track"
+            required
+            value={stack}
+            onValueChange={setStack}
+            options={STACK_OPTIONS}
+          />
         )}
         {/* The gate operator uses this profile photo to confirm identity. */}
         <div className="flex items-center gap-4">
@@ -352,6 +470,29 @@ function PlusOneCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
     );
   }
 
+  if (me.plusOneAllowed === false) {
+    const limit = me.plusOnePlaces?.limit ?? 0;
+    return (
+      <Panel>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="label text-sm font-bold text-orange">Plus-one</h2>
+          <span className="rounded-full border border-orange/50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-orange">
+            Places full{limit > 0 && ` · ${limit}/${limit}`}
+          </span>
+        </div>
+        <p className="text-sm font-semibold">Plus-one places are already filled</p>
+        <p className="mt-1 text-sm text-cream-dim">
+          {limit > 0
+            ? `All ${limit} plus-one places for this event were claimed by earlier registrations. `
+            : "All plus-one places for this event have been claimed. "}
+          Your own registration is confirmed. We look forward to seeing you!
+        </p>
+      </Panel>
+    );
+  }
+
+  const limitedPlace = (me.plusOnePlaces?.limit ?? 0) > 0;
+
   async function addDirect(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -364,6 +505,7 @@ function PlusOneCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
+      if (err instanceof ApiError && err.status === 403) onChanged();
     } finally {
       setBusy(false);
     }
@@ -381,6 +523,7 @@ function PlusOneCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
       setInviteUrl(inviteUrl);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
+      if (err instanceof ApiError && err.status === 403) onChanged();
     } finally {
       setBusy(false);
     }
@@ -392,6 +535,9 @@ function PlusOneCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
       {mode === "none" && (
         <div className="space-y-3">
           <p className="text-sm text-cream-dim">
+            {limitedPlace
+              ? `You've secured one of the ${me.plusOnePlaces?.limit} plus-one places for this event. `
+              : ""}
             You can bring one guest. Fill in their details yourself, or send them an invite to do it.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -420,32 +566,16 @@ function PlusOneCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
             label="Gender"
             required
             value={gender}
-            onChange={(e) => setGender(e.target.value as Gender)}
-          >
-            <option value="" disabled>
-              Select…
-            </option>
-            {GENDER_OPTIONS.map(([value, text]) => (
-              <option key={value} value={value}>
-                {text}
-              </option>
-            ))}
-          </Select>
+            onValueChange={setGender}
+            options={GENDER_OPTIONS}
+          />
           <Select
             label="Relationship to you"
             required
             value={relationship}
-            onChange={(e) => setRelationship(e.target.value as Relationship)}
-          >
-            <option value="" disabled>
-              Select…
-            </option>
-            {RELATIONSHIP_OPTIONS.map(([value, text]) => (
-              <option key={value} value={value}>
-                {text}
-              </option>
-            ))}
-          </Select>
+            onValueChange={setRelationship}
+            options={RELATIONSHIP_OPTIONS}
+          />
           <div className="flex gap-3">
             <Button type="submit" busy={busy}>
               {busy ? "Adding…" : "Add plus-one"}

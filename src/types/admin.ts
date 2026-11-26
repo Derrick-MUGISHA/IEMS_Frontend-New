@@ -75,6 +75,8 @@ export type AdminEvent = {
   organiser: string;
   maxAttendees: number;
   registeredCount?: number;
+  plusOneLimit?: number;
+  plusOneSlotsTaken?: number;
   details: string;
   rules: string[];
   status: EventStatus;
@@ -144,6 +146,7 @@ export type AdminGuest = {
   email: string;
   guestType: GuestType;
   invitedBy: string | null;
+  eventId: string | null;
   eventName: string | null;
   addedAt: string;
   ticket: { code?: string; status: TicketStatus; scannedAt: string | null } | null;
@@ -375,5 +378,17 @@ export type EventEngagement = {
     total: number;
   };
   plusOne: { has: number; none: number };
-  emails: { total: number; byKind: Record<EmailKind, { sent: number; failed: number }> };
+  emails: {
+    total: number;
+    byKind: Record<
+      EmailKind,
+      { sent: number; failed: number; stillFailing: number; retryable: boolean }
+    >;
+  };
+};
+
+export type EmailRetrySummary = {
+  sent: string[];
+  skipped: { to: string; reason: string }[];
+  failed: { to: string; error: string }[];
 };

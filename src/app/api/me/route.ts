@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { dbConnect } from "@/lib/db";
-import { Event, Guest, Participant, Ticket, GENDERS, STACKS } from "@/models";
+import { Event, Guest, Participant, Ticket, GENDERS, STACKS, plusOnePlaces } from "@/models";
 import { requireAttendee } from "@/lib/auth";
 import { roleLine } from "@/lib/tickets";
 import { ticketPreview } from "@/lib/ticketPreview";
+import { claimPlusOneSlot } from "@/lib/plusOneSlots";
 import { ok, fail, unauthorized, notFound } from "@/lib/http";
 
 export async function GET(req: Request) {
@@ -14,6 +15,8 @@ export async function GET(req: Request) {
   const participant = await Participant.findById(participantId);
   if (!participant) return notFound("Registration");
 
+  /* claimed before the event is read so the places shown include their own */
+  const plusOneAllowed = await claimPlusOneSlot(participant);
   const [event, ticket, plusOne] = await Promise.all([
     Event.findById(participant.event),
     Ticket.findOne({ holderType: "Participant", holderId: participant._id }),
@@ -58,6 +61,11 @@ export async function GET(req: Request) {
       roleLine: await roleLine({ kind: "Participant", doc: participant }),
       cohort: participant.stack ?? null,
       photoUrl: participant.profilePicture ?? null,
+      /* the photo uploads in the background for a moment after the pass is issued */
+      photoPending:
+        !participant.profilePicture &&
+        !!ticket &&
+        Date.now() - new Date(ticket.issuedAt).getTime() < 2 * 60 * 1000,
       status: participant.status,
     },
     event: event && {
@@ -76,6 +84,8 @@ export async function GET(req: Request) {
       preview: await ticketPreview(ticket, { event, holder: { name: participant.name, type: "PARTICIPANT" } }),
     },
     plusOne: plusOneView,
+    plusOneAllowed,
+    plusOnePlaces: event ? plusOnePlaces(event) : null,
   });
 }
 
@@ -102,11 +112,12 @@ export async function PATCH(req: Request) {
   if (!participant) return notFound("Registration");
   if (participant.status === "PENDING") return fail("Verify your email first", 403);
 
+  /* participants only fill in what's missing; details already on file stay */
   const { name, phone, gender, stack } = parsed.data;
-  if (name) participant.name = name;
-  if (phone) participant.phone = phone;
-  if (gender) participant.gender = gender;
-  if (stack) participant.stack = stack;
+  if (name && (!participant.name || participant.name.startsWith("Guest of "))) participant.name = name;
+  if (phone && !participant.phone) participant.phone = phone;
+  if (gender && !participant.gender) participant.gender = gender;
+  if (stack && !participant.stack) participant.stack = stack;
   await participant.save();
 
   return ok({

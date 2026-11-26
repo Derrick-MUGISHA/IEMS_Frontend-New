@@ -52,3 +52,7 @@ package-lock.json
 /tmp/pdfs/
 .agents/
 AGENTS.md
+
+# AI agent tooling (kept local only)
+skills-lock.json
+.claude/

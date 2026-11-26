@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "crypto";
 import { dbConnect } from "./db";
-import { Event, Participant, Guest, VerificationToken, EmailLog } from "@/models";
+import { Event, Participant, Guest, VerificationToken, EmailLog, plusOnePlaces } from "@/models";
 import { sendProgressReminderEmail, type ProgressStep } from "./mailer";
 import { appUrl } from "./appUrl";
 import { formatEventDate } from "./time";
@@ -49,7 +49,7 @@ export async function runDailyReminders(eventId?: string): Promise<ReminderSumma
     startTime: { $gt: now },
     archivedAt: null,
     status: "OPEN",
-  }).select("_id name startTime");
+  }).select("_id name startTime plusOneLimit plusOneSlotsTaken");
 
   const summary: ReminderSummary = { scanned: 0, sent: 0, failed: 0, skipped: 0 };
   if (events.length === 0) return summary;
@@ -61,7 +61,7 @@ export async function runDailyReminders(eventId?: string): Promise<ReminderSumma
     const participants = await Participant.find({
       event: event._id,
       registrationStatus: { $ne: "REJECTED" },
-    }).select("name email status profilePicture");
+    }).select("name email status profilePicture plusOneAllowed");
     if (participants.length === 0) continue;
 
     /* one query for "who already invited a plus-one" among the COMPLETE folks */
@@ -94,8 +94,14 @@ export async function runDailyReminders(eventId?: string): Promise<ReminderSumma
       day: "numeric",
     })}`;
 
+    const placesFull = plusOnePlaces(event).full;
     for (const p of participants) {
-      const step = nextStep(p.status, p.profilePicture, invitedBy.has(p._id.toString()));
+      /* without a place, and with none left to claim, there's no plus-one step */
+      const step = nextStep(
+        p.status,
+        p.profilePicture,
+        invitedBy.has(p._id.toString()) || (p.plusOneAllowed !== true && placesFull)
+      );
       if (!step) continue;
       summary.scanned += 1;
 

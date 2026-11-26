@@ -19,6 +19,21 @@ type Invite = { participantName: string; eventName: string; email: string | null
 type Gender = "FEMALE" | "MALE" | "OTHER";
 type Relationship = "RELATIVE" | "FRIEND" | "COLLEAGUE" | "PARTNER" | "MENTOR" | "OTHER";
 
+const GENDER_OPTIONS: [Gender, string][] = [
+  ["FEMALE", "Female"],
+  ["MALE", "Male"],
+  ["OTHER", "Other / prefer not to say"],
+];
+
+const RELATIONSHIP_OPTIONS: [Relationship, string][] = [
+  ["RELATIVE", "Relative"],
+  ["FRIEND", "Friend"],
+  ["COLLEAGUE", "Colleague"],
+  ["PARTNER", "Partner"],
+  ["MENTOR", "Mentor"],
+  ["OTHER", "Other"],
+];
+
 const step = {
   initial: { opacity: 0, y: 16 },
   animate: { opacity: 1, y: 0 },
@@ -31,7 +46,7 @@ export default function PlusOnePage({ params }: { params: Promise<{ token: strin
   const [email, setEmail] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
   const [relationship, setRelationship] = useState<Relationship | "">("");
-  const [state, setState] = useState<"loading" | "form" | "sending" | "done" | "invalid">("loading");
+  const [state, setState] = useState<"loading" | "form" | "sending" | "done" | "invalid" | "full">("loading");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -43,7 +58,7 @@ export default function PlusOnePage({ params }: { params: Promise<{ token: strin
       })
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : "Something went wrong");
-        setState("invalid");
+        setState(err instanceof ApiError && err.status === 403 ? "full" : "invalid");
       });
   }, [token]);
 
@@ -58,7 +73,7 @@ export default function PlusOnePage({ params }: { params: Promise<{ token: strin
       setState("done");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
-      setState("form");
+      setState(err instanceof ApiError && err.status === 403 ? "full" : "form");
     }
   }
 
@@ -72,6 +87,19 @@ export default function PlusOnePage({ params }: { params: Promise<{ token: strin
           {state === "loading" && (
             <motion.div key="loading" {...step}>
               <Waiting message="Checking your invite…" />
+            </motion.div>
+          )}
+
+          {state === "full" && (
+            <motion.div
+              key="full"
+              {...step}
+              className="flex flex-col items-center gap-3 py-6 text-center"
+            >
+              <span className="rounded-full border border-orange/50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-orange">
+                Plus-one places full
+              </span>
+              <p className="text-sm text-cream-dim">{error}</p>
             </motion.div>
           )}
 
@@ -139,31 +167,16 @@ export default function PlusOnePage({ params }: { params: Promise<{ token: strin
                 label="Gender"
                 required
                 value={gender}
-                onChange={(e) => setGender(e.target.value as Gender)}
-              >
-                <option value="" disabled>
-                  Select…
-                </option>
-                <option value="FEMALE">Female</option>
-                <option value="MALE">Male</option>
-                <option value="OTHER">Other / prefer not to say</option>
-              </Select>
+                onValueChange={setGender}
+                options={GENDER_OPTIONS}
+              />
               <Select
                 label={`How are you connected to ${invite.participantName.split(" ")[0]}?`}
                 required
                 value={relationship}
-                onChange={(e) => setRelationship(e.target.value as Relationship)}
-              >
-                <option value="" disabled>
-                  Select…
-                </option>
-                <option value="RELATIVE">Relative</option>
-                <option value="FRIEND">Friend</option>
-                <option value="COLLEAGUE">Colleague</option>
-                <option value="PARTNER">Partner</option>
-                <option value="MENTOR">Mentor</option>
-                <option value="OTHER">Other</option>
-              </Select>
+                onValueChange={setRelationship}
+                options={RELATIONSHIP_OPTIONS}
+              />
               <Button type="submit" busy={state === "sending"} className="w-full">
                 {state === "sending" ? "Registering…" : "Register"}
               </Button>
